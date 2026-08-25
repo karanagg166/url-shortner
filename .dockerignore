@@ -1,10 +1,44 @@
-node_modules
-.next
+# Version control
 .git
 .gitignore
 
+# Dependencies
+node_modules
+.pnpm-store
+.pnp
+.pnp.*
+
+# Build outputs
+.next
+out
+build
+dist
+.vercel
+
+# Environment files
+.env*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# Python
 backend/__pycache__
 backend/.venv
+backend/venv
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
 
-.env
-.env.local
+# Supabase
+supabase/.temp
+supabase/.branches
+
+# OS & IDE
+.DS_Store
+.idea
+.vscode
