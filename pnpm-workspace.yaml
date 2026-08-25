@@ -1,0 +1,4 @@
+allowBuilds:
+  "@tailwindcss/postcss": true
+  sharp: true
+  unrs-resolver: true
