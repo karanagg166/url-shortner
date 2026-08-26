@@ -38,7 +38,7 @@ export async function GET(
 
     const location = res.headers.get("location");
     if (location) {
-      return NextResponse.redirect(location, 307);
+      return NextResponse.redirect(location, 301);
     }
   } catch (err) {
     console.error("Short code redirection error:", err);

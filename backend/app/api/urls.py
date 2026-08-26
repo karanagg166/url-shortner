@@ -84,7 +84,7 @@ async def delete_url(
 
 @router.get("/resolve/{short_code}", response_class=RedirectResponse)
 async def resolve_short_url(short_code: str):
-  """Resolve short code to original URL and issue HTTP 307 Temporary Redirect."""
+  """Resolve short code to original URL and issue HTTP 301 Permanent Redirect."""
   original_url = await UrlService.get_original_url(short_code)
   if not original_url:
     raise HTTPException(
@@ -92,6 +92,6 @@ async def resolve_short_url(short_code: str):
         detail=f"Short URL '{short_code}' was not found or is currently inactive",
     )
   return RedirectResponse(
-      url=original_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT
+      url=original_url, status_code=status.HTTP_301_MOVED_PERMANENTLY
   )
 
