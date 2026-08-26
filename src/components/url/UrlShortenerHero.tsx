@@ -85,10 +85,13 @@ export default function UrlShortenerHero() {
         session?.access_token
       );
 
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      const displayShortUrl = origin ? `${origin}/${result.short_code}` : result.short_url;
+
       const newItem: ShortenedItem = {
         id: result.id,
         originalUrl: result.original_url,
-        shortUrl: result.short_url,
+        shortUrl: displayShortUrl,
         alias: result.short_code,
         createdAt: "Just now",
         clicks: result.clicks_count || 0,
@@ -113,7 +116,12 @@ export default function UrlShortenerHero() {
   };
 
   const handleCopy = (id: string, text: string) => {
-    navigator.clipboard.writeText(text);
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    let cleanUrl = text;
+    if (origin && cleanUrl.includes("localhost:8000")) {
+      cleanUrl = cleanUrl.replace("http://localhost:8000", origin);
+    }
+    navigator.clipboard.writeText(cleanUrl);
     setCopiedId(id);
     setTimeout(() => {
       setCopiedId(null);

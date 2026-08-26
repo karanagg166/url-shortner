@@ -19,6 +19,23 @@ export async function syncUserProfile(
   }
 ): Promise<{ data: UserProfile | null; error: Error | null }> {
   try {
+    // Only attempt client-side sync if user has an active session.
+    // If no session exists (e.g. pending email confirmation), the PostgreSQL
+    // trigger `handle_new_user` in Supabase creates the profile automatically.
+    const { data: sessionData } = await supabase.auth.getSession();
+    if (!sessionData?.session) {
+      return {
+        data: {
+          id: userId,
+          email: data.email,
+          full_name: data.full_name,
+          avatar_url: data.avatar_url,
+          provider: data.provider || "email",
+        },
+        error: null,
+      };
+    }
+
     const profilePayload = {
       id: userId,
       email: data.email,
@@ -28,7 +45,7 @@ export async function syncUserProfile(
       updated_at: new Date().toISOString(),
     };
 
-    // Try upserting to 'profiles' table
+    // Try upserting to 'profiles' table with authenticated JWT
     const { data: profile, error } = await supabase
       .from("profiles")
       .upsert(profilePayload, { onConflict: "id" })
@@ -37,7 +54,6 @@ export async function syncUserProfile(
 
     if (error) {
       console.warn("Profiles table sync notice:", error.message);
-      // Fallback object if table creation is pending
       return {
         data: {
           id: userId,
@@ -80,8 +96,9 @@ export async function signUpWithEmail({
 
     if (error) throw error;
 
-    // If user object returned, sync to database table
-    if (data.user) {
+    // If user and session are immediately available, sync profile.
+    // Otherwise, the database trigger `handle_new_user` in Supabase creates the profile automatically.
+    if (data.user && data.session) {
       await syncUserProfile(data.user.id, {
         email: data.user.email || email,
         full_name: fullName,

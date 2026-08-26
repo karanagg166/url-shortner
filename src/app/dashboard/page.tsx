@@ -56,7 +56,12 @@ export default function DashboardPage() {
     setFetchError(null);
     try {
       const data = await getUserUrls(session.access_token);
-      setUrls(data);
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      const normalized = data.map((u) => ({
+        ...u,
+        short_url: origin ? `${origin}/${u.short_code}` : u.short_url,
+      }));
+      setUrls(normalized);
     } catch (err: unknown) {
       setFetchError(err instanceof Error ? err.message : "Failed to load your shortened URLs");
     } finally {
@@ -98,8 +103,12 @@ export default function DashboardPage() {
         session?.access_token
       );
 
-      setFormSuccess(newLink);
-      setUrls((prev) => [newLink, ...prev.filter((u) => u.id !== newLink.id)]);
+      const origin = typeof window !== "undefined" ? window.location.origin : "";
+      const displayUrl = origin ? `${origin}/${newLink.short_code}` : newLink.short_url;
+      const normalizedLink = { ...newLink, short_url: displayUrl };
+
+      setFormSuccess(normalizedLink);
+      setUrls((prev) => [normalizedLink, ...prev.filter((u) => u.id !== newLink.id)]);
       setLongUrl("");
       setTitle("");
       setCustomSlug("");
@@ -129,7 +138,12 @@ export default function DashboardPage() {
   };
 
   const handleCopy = (code: string, text: string) => {
-    navigator.clipboard.writeText(text);
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    let cleanUrl = text;
+    if (origin && cleanUrl.includes("localhost:8000")) {
+      cleanUrl = cleanUrl.replace("http://localhost:8000", origin);
+    }
+    navigator.clipboard.writeText(cleanUrl);
     setCopiedCode(code);
     setTimeout(() => {
       setCopiedCode(null);
@@ -469,7 +483,7 @@ export default function DashboardPage() {
                         </span>
                       )}
                       <span className="px-2 py-0.5 text-[10px] font-bold rounded-md bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
-                        HTTP 307 Temp Redirect
+                        HTTP 301 Permanent Redirect
                       </span>
                     </div>
 
