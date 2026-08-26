@@ -29,3 +29,6 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
   - Run scripts: `docker compose exec frontend pnpm run <script>`
   - Execute binary: `docker compose exec frontend pnpm exec <cmd>`
   - Download & execute: `docker compose exec frontend pnpm dlx <pkg>`
+
+
+3 do not push the code to origin until i say so ohk 

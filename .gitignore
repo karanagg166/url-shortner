@@ -104,3 +104,5 @@ supabase/.branches/
 ehthumbs.db
 Thumbs.db
 *.pem
+
+certificates
