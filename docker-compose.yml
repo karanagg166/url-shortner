@@ -24,6 +24,8 @@ services:
       - "8000:8000"
     volumes:
       - ./backend:/app
+    env_file:
+      - ./backend/.env
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
@@ -50,7 +52,10 @@ services:
       - frontend_node_modules:/app/node_modules
       - frontend_next:/app/.next
     environment:
+      - NEXT_PUBLIC_SUPABASE_URL=https://ngzcepdfauqxinarmxfi.supabase.co
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_PreIMFnaHXDBR_Rp-8PR5Q_G1V633um
       - NEXT_PUBLIC_API_URL=http://localhost:8000
+      - NEXT_PUBLIC_APP_URL=http://localhost:3000
       - WATCHPACK_POLLING=true
       - PORT=3000
       - HOSTNAME=0.0.0.0
@@ -59,6 +64,7 @@ services:
       backend:
         condition: service_healthy
     restart: unless-stopped
+
 
 volumes:
   frontend_node_modules:

@@ -1,6 +1,9 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import Link from "next/link";
+import { useAuth } from "@/hooks/useAuth";
+import { shortenUrl } from "@/lib/api";
 import {
   Link2,
   Copy,
@@ -27,6 +30,7 @@ interface ShortenedItem {
 }
 
 export default function UrlShortenerHero() {
+  const { session } = useAuth();
   const [url, setUrl] = useState("");
   const [customAlias, setCustomAlias] = useState("");
   const [showAdvanced, setShowAdvanced] = useState(false);
@@ -35,19 +39,21 @@ export default function UrlShortenerHero() {
   const [activeQrItem, setActiveQrItem] = useState<ShortenedItem | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Initial demo links
-  const [links, setLinks] = useState<ShortenedItem[]>([
-    {
-      id: "demo-1",
-      originalUrl: "https://github.com/karanagg166/url-shortner/releases/v2.0-high-performance-redis-cache",
-      shortUrl: "https://short.link/gh-release",
-      alias: "gh-release",
-      createdAt: "Just now",
-      clicks: 142,
-    },
-  ]);
+  // Initial links state with localStorage persistence
+  const [links, setLinks] = useState<ShortenedItem[]>([]);
 
-  const handleShorten = (e: React.FormEvent) => {
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem("shortlink_recent_urls");
+      if (saved) {
+        setLinks(JSON.parse(saved));
+      }
+    } catch {
+      // Ignore
+    }
+  }, []);
+
+  const handleShorten = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
 
@@ -70,25 +76,40 @@ export default function UrlShortenerHero() {
 
     setIsLoading(true);
 
-    setTimeout(() => {
-      const randomSlug = customAlias.trim()
-        ? customAlias.trim().toLowerCase().replace(/[^a-z0-9-_]/g, "")
-        : Math.random().toString(36).substring(2, 8);
+    try {
+      const result = await shortenUrl(
+        {
+          original_url: trimmed,
+          custom_slug: customAlias.trim() || undefined,
+        },
+        session?.access_token
+      );
 
       const newItem: ShortenedItem = {
-        id: "item-" + Date.now(),
-        originalUrl: trimmed,
-        shortUrl: `https://short.link/${randomSlug}`,
-        alias: randomSlug,
+        id: result.id,
+        originalUrl: result.original_url,
+        shortUrl: result.short_url,
+        alias: result.short_code,
         createdAt: "Just now",
-        clicks: 0,
+        clicks: result.clicks_count || 0,
       };
 
-      setLinks((prev) => [newItem, ...prev.slice(0, 4)]);
+      setLinks((prev) => {
+        const updated = [newItem, ...prev.filter((i) => i.id !== newItem.id).slice(0, 4)];
+        try {
+          localStorage.setItem("shortlink_recent_urls", JSON.stringify(updated));
+        } catch {
+          // Ignore
+        }
+        return updated;
+      });
       setUrl("");
       setCustomAlias("");
+    } catch (err: unknown) {
+      setErrorMessage(err instanceof Error ? err.message : "Failed to shorten URL");
+    } finally {
       setIsLoading(false);
-    }, 600);
+    }
   };
 
   const handleCopy = (id: string, text: string) => {
@@ -276,6 +297,20 @@ export default function UrlShortenerHero() {
                   </div>
                 ))}
               </div>
+
+              {!session?.user && (
+                <div className="mt-4 p-3.5 rounded-xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
+                  <span className="text-zinc-600 dark:text-zinc-400">
+                    Want to track clicks and view all your shortened links across sessions?
+                  </span>
+                  <Link
+                    href="/login"
+                    className="font-bold text-blue-600 dark:text-blue-400 hover:underline shrink-0"
+                  >
+                    Log In / Sign Up →
+                  </Link>
+                </div>
+              )}
             </div>
           )}
         </div>
