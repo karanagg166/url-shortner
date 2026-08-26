@@ -113,6 +113,10 @@ async def resolve_short_url(short_code: str):
         detail=f"Short URL '{short_code}' was not found or is currently inactive",
     )
   return RedirectResponse(
-      url=original_url, status_code=status.HTTP_301_MOVED_PERMANENTLY
+      url=original_url,
+      status_code=status.HTTP_301_MOVED_PERMANENTLY,
+      headers={
+          "Cache-Control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=3600"
+      },
   )
 

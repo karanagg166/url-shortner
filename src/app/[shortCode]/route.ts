@@ -23,11 +23,9 @@ export async function GET(
   }
 
   const origin = request.nextUrl.origin;
-  const configuredBackend = process.env.NEXT_PUBLIC_API_URL;
   const backendBase = (
-    configuredBackend && (process.env.NODE_ENV !== "production" || !configuredBackend.includes("localhost"))
-      ? configuredBackend
-      : origin
+    process.env.INTERNAL_API_URL ||
+    (process.env.NODE_ENV !== "production" ? "http://backend:8000" : origin)
   ).replace(/\/$/, "");
 
   try {
@@ -38,7 +36,12 @@ export async function GET(
 
     const location = res.headers.get("location");
     if (location) {
-      return NextResponse.redirect(location, 301);
+      const response = NextResponse.redirect(location, 301);
+      response.headers.set(
+        "Cache-Control",
+        "public, max-age=86400, s-maxage=86400, stale-while-revalidate=3600"
+      );
+      return response;
     }
   } catch (err) {
     console.error("Short code redirection error:", err);

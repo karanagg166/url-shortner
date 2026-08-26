@@ -74,5 +74,9 @@ async def redirect_short_url(short_code: str):
     )
 
   return RedirectResponse(
-      url=original_url, status_code=status.HTTP_301_MOVED_PERMANENTLY
+      url=original_url,
+      status_code=status.HTTP_301_MOVED_PERMANENTLY,
+      headers={
+          "Cache-Control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=3600"
+      },
   )
