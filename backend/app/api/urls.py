@@ -1,5 +1,6 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.responses import RedirectResponse
 from app.core.auth import AuthUser, get_current_user, get_optional_user
 from app.models.url import UrlCreateRequest, UrlResponse
 from app.services.url_service import UrlService
@@ -79,3 +80,18 @@ async def delete_url(
         detail="URL not found or not owned by current user",
     )
   return {"success": True, "message": "URL deleted successfully"}
+
+
+@router.get("/resolve/{short_code}", response_class=RedirectResponse)
+async def resolve_short_url(short_code: str):
+  """Resolve short code to original URL and issue HTTP 307 Temporary Redirect."""
+  original_url = await UrlService.get_original_url(short_code)
+  if not original_url:
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail=f"Short URL '{short_code}' was not found or is currently inactive",
+    )
+  return RedirectResponse(
+      url=original_url, status_code=status.HTTP_307_TEMPORARY_REDIRECT
+  )
+

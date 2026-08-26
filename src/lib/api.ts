@@ -1,4 +1,11 @@
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+const isProd = process.env.NODE_ENV === "production";
+const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL;
+const API_BASE_URL =
+  configuredApiUrl && (!isProd || !configuredApiUrl.includes("localhost"))
+    ? configuredApiUrl
+    : typeof window !== "undefined"
+      ? ""
+      : "http://localhost:8000";
 
 export interface ShortenedUrl {
   id: string;

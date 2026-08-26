@@ -22,10 +22,16 @@ export async function GET(
     return NextResponse.next();
   }
 
-  const backendUrl = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000";
+  const origin = request.nextUrl.origin;
+  const configuredBackend = process.env.NEXT_PUBLIC_API_URL;
+  const backendBase = (
+    configuredBackend && (process.env.NODE_ENV !== "production" || !configuredBackend.includes("localhost"))
+      ? configuredBackend
+      : origin
+  ).replace(/\/$/, "");
 
   try {
-    const res = await fetch(`${backendUrl.replace(/\/$/, "")}/${encodeURIComponent(shortCode)}`, {
+    const res = await fetch(`${backendBase}/api/urls/resolve/${encodeURIComponent(shortCode)}`, {
       method: "GET",
       redirect: "manual",
     });
