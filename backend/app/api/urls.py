@@ -16,17 +16,32 @@ def get_base_url(request: Optional[Request] = None) -> str:
       os.getenv("SHORT_URL_BASE")
       or os.getenv("NEXT_PUBLIC_SHORT_DOMAIN")
       or os.getenv("APP_URL")
+      or os.getenv("NEXT_PUBLIC_APP_URL")
   )
-  if app_url and app_url not in ("localhost:3000", "http://localhost:3000", "http://localhost:8000"):
+  if app_url and app_url not in ("https://", "http://", "/"):
     return app_url.rstrip("/")
 
   if request:
-    # 2. Check Origin or Referer from frontend request (only if public domain)
+    # 2. Check Origin or Referer from frontend request
     origin = request.headers.get("origin")
-    if origin and "http" in origin and "localhost" not in origin:
+    if origin and "http" in origin:
       return origin.rstrip("/")
 
-  return "https://"
+    referer = request.headers.get("referer")
+    if referer:
+      try:
+        parsed = urlparse(referer)
+        if parsed.scheme and parsed.netloc:
+          return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
+      except Exception:
+        pass
+
+    # 3. Check forwarded proto/host from reverse proxy or client headers
+    forwarded_proto = request.headers.get("x-forwarded-proto", request.url.scheme)
+    forwarded_host = request.headers.get("x-forwarded-host", request.headers.get("host", "localhost:3000"))
+    return f"{forwarded_proto}://{forwarded_host}".rstrip("/")
+
+  return "http://localhost:3000"
 
 
 @router.post("", response_model=UrlResponse, status_code=status.HTTP_201_CREATED)

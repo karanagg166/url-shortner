@@ -34,12 +34,10 @@ class UrlService:
         return code[:length]
 
   @staticmethod
-  def format_short_url(short_code: str, base_url: str = "https://") -> str:
+  def format_short_url(short_code: str, base_url: str = "http://localhost:3000") -> str:
     if not base_url or base_url in ("https://", "http://", "/"):
-      return f"https://{short_code}"
+      base_url = "http://localhost:3000"
     cleaned = base_url.rstrip("/")
-    if cleaned.endswith("://"):
-      return f"{cleaned}{short_code}"
     return f"{cleaned}/{short_code}"
 
   @classmethod
@@ -47,7 +45,7 @@ class UrlService:
       cls,
       request: UrlCreateRequest,
       user_id: Optional[str] = None,
-      base_url: str = "https://",
+      base_url: str = "http://localhost:3000",
   ) -> UrlResponse:
     supabase = get_supabase()
     redis = get_redis()
@@ -191,7 +189,7 @@ class UrlService:
 
   @classmethod
   async def get_user_urls(
-      cls, user_id: str, base_url: str = "https://"
+      cls, user_id: str, base_url: str = "http://localhost:3000"
   ) -> List[UrlResponse]:
     """Fetch all shortened URLs belonging to the authenticated user.
 

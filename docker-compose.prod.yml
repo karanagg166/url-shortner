@@ -1,9 +1,27 @@
 services:
+  caddy:
+    image: caddy:2-alpine
+    container_name: url-shortener-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp" # HTTP/3 QUIC support
+    environment:
+      - DOMAIN=${DOMAIN:-localhost}
+      - ACME_EMAIL=${ACME_EMAIL:-admin@example.com}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - backend
+
   redis:
     image: redis:7-alpine
     container_name: url-shortener-redis
-    ports:
-      - "6379:6379"
+    restart: unless-stopped
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes
@@ -13,23 +31,17 @@ services:
       timeout: 3s
       retries: 5
       start_period: 3s
-    restart: unless-stopped
 
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     container_name: url-shortener-backend
-    ports:
-      - "8000:8000"
-    volumes:
-      - ./backend:/app
-    env_file:
-      - ./backend/.env
+    restart: unless-stopped
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
-      - SHORT_URL_BASE=http://localhost:3000
+      - SHORT_URL_BASE=${SHORT_URL_BASE:-https://}
     depends_on:
       redis:
         condition: service_healthy
@@ -39,36 +51,26 @@ services:
       timeout: 5s
       retries: 5
       start_period: 5s
-    restart: unless-stopped
 
   frontend:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: url-shortener-frontend
-    ports:
-      - "3000:3000"
-    volumes:
-      - .:/app
-      - frontend_node_modules:/app/node_modules
-      - frontend_next:/app/.next
+    restart: unless-stopped
     environment:
-      - NEXT_PUBLIC_SUPABASE_URL=https://ngzcepdfauqxinarmxfi.supabase.co
-      - NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_PreIMFnaHXDBR_Rp-8PR5Q_G1V633um
-      - NEXT_PUBLIC_API_URL=http://localhost:8000
-      - NEXT_PUBLIC_APP_URL=http://localhost:3000
-      - NEXT_PUBLIC_SHORT_DOMAIN=http://localhost:3000
-      - WATCHPACK_POLLING=true
+      - NEXT_PUBLIC_SUPABASE_URL=${NEXT_PUBLIC_SUPABASE_URL}
+      - NEXT_PUBLIC_SUPABASE_ANON_KEY=${NEXT_PUBLIC_SUPABASE_ANON_KEY}
+      - NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL:-http://backend:8000}
+      - NEXT_PUBLIC_SHORT_DOMAIN=${NEXT_PUBLIC_SHORT_DOMAIN:-https://}
       - PORT=3000
       - HOSTNAME=0.0.0.0
-      - CI=true
+      - NODE_ENV=production
     depends_on:
       backend:
         condition: service_healthy
-    restart: unless-stopped
-
 
 volumes:
-  frontend_node_modules:
-  frontend_next:
   redis_data:
+  caddy_data:
+  caddy_config:

@@ -8,27 +8,28 @@ const API_BASE_URL =
       : "http://localhost:8000";
 
 /**
- * Resolves the clean public short domain for short link display and copying.
- * Defaults to "https://" so URLs format directly as https://${shortCode}.
+ * Resolves the public short domain for short link display and copying.
+ * Uses NEXT_PUBLIC_SHORT_DOMAIN or NEXT_PUBLIC_APP_URL if configured,
+ * or falls back to current window origin (e.g. http://localhost:3000 in dev).
  */
 export function getShortDomain(): string {
-  const customDomain = process.env.NEXT_PUBLIC_SHORT_DOMAIN;
-  if (customDomain && customDomain !== "https://" && !customDomain.includes("localhost")) {
+  const customDomain = process.env.NEXT_PUBLIC_SHORT_DOMAIN || process.env.NEXT_PUBLIC_APP_URL;
+  if (customDomain && customDomain !== "https://" && customDomain !== "http://") {
     return customDomain.replace(/\/$/, "");
   }
-  return "https://";
+  if (typeof window !== "undefined") {
+    return window.location.origin.replace(/\/$/, "");
+  }
+  return "http://localhost:3000";
 }
 
 /**
- * Formats a short code as a clean direct HTTPS short URL (e.g., https://YWJKbxC).
+ * Formats a short code with the resolved domain (e.g. http://localhost:3000/YWJKbxC or https://yourdomain.com/YWJKbxC).
  */
 export function formatShortUrl(shortCode: string, fallbackUrl?: string): string {
   if (!shortCode) return fallbackUrl || "";
-  const customDomain = process.env.NEXT_PUBLIC_SHORT_DOMAIN;
-  if (customDomain && !customDomain.endsWith("://") && !customDomain.includes("localhost")) {
-    return `${customDomain.replace(/\/$/, "")}/${shortCode}`;
-  }
-  return `https://${shortCode}`;
+  const domain = getShortDomain();
+  return `${domain}/${shortCode}`;
 }
 
 export interface ShortenedUrl {
