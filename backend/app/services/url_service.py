@@ -33,12 +33,21 @@ class UrlService:
       if len(code) >= length:
         return code[:length]
 
+  @staticmethod
+  def format_short_url(short_code: str, base_url: str = "https://") -> str:
+    if not base_url or base_url in ("https://", "http://", "/"):
+      return f"https://{short_code}"
+    cleaned = base_url.rstrip("/")
+    if cleaned.endswith("://"):
+      return f"{cleaned}{short_code}"
+    return f"{cleaned}/{short_code}"
+
   @classmethod
   async def shorten_url(
       cls,
       request: UrlCreateRequest,
       user_id: Optional[str] = None,
-      base_url: str = "http://localhost:8000",
+      base_url: str = "https://",
   ) -> UrlResponse:
     supabase = get_supabase()
     redis = get_redis()
@@ -171,7 +180,7 @@ class UrlService:
         user_id=record.get("user_id"),
         original_url=record["original_url"],
         short_code=record["short_code"],
-        short_url=f"{base_url.rstrip('/')}/{short_code}",
+        short_url=cls.format_short_url(record["short_code"], base_url),
         title=record.get("title"),
         clicks_count=record.get("clicks_count", 0),
         qr_code_svg=record.get("qr_code_svg"),
@@ -182,7 +191,7 @@ class UrlService:
 
   @classmethod
   async def get_user_urls(
-      cls, user_id: str, base_url: str = "http://localhost:8000"
+      cls, user_id: str, base_url: str = "https://"
   ) -> List[UrlResponse]:
     """Fetch all shortened URLs belonging to the authenticated user.
 
@@ -222,7 +231,7 @@ class UrlService:
               user_id=item.get("user_id"),
               original_url=item["original_url"],
               short_code=code,
-              short_url=f"{base_url.rstrip('/')}/{code}",
+              short_url=cls.format_short_url(code, base_url),
               title=item.get("title"),
               clicks_count=clicks,
               qr_code_svg=item.get("qr_code_svg"),

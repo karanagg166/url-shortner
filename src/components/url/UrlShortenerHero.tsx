@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAuth } from "@/hooks/useAuth";
-import { shortenUrl } from "@/lib/api";
+import { shortenUrl, formatShortUrl, getShortDomain } from "@/lib/api";
 import {
   Link2,
   Copy,
@@ -85,8 +85,7 @@ export default function UrlShortenerHero() {
         session?.access_token
       );
 
-      const origin = typeof window !== "undefined" ? window.location.origin : "";
-      const displayShortUrl = origin ? `${origin}/${result.short_code}` : result.short_url;
+      const displayShortUrl = formatShortUrl(result.short_code, result.short_url);
 
       const newItem: ShortenedItem = {
         id: result.id,
@@ -116,12 +115,7 @@ export default function UrlShortenerHero() {
   };
 
   const handleCopy = (id: string, text: string) => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    let cleanUrl = text;
-    if (origin && cleanUrl.includes("localhost:8000")) {
-      cleanUrl = cleanUrl.replace("http://localhost:8000", origin);
-    }
-    navigator.clipboard.writeText(cleanUrl);
+    navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => {
       setCopiedId(null);
@@ -203,7 +197,7 @@ export default function UrlShortenerHero() {
                 </label>
                 <div className="flex items-center rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/80 overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
                   <span className="px-3.5 py-2 text-xs font-mono text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border-r border-zinc-200 dark:border-zinc-700">
-                    short.link/
+                    https://
                   </span>
                   <input
                     type="text"

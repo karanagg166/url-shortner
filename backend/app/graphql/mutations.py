@@ -1,5 +1,6 @@
 from typing import Optional
 import strawberry
+from app.api.urls import get_base_url
 from app.core.auth import get_optional_user
 from app.graphql.types import UrlType
 from app.models.url import UrlCreateRequest
@@ -21,7 +22,7 @@ class Mutation:
     user = await get_optional_user(request)
     user_id = user.id if user else None
 
-    base_url = str(request.base_url).rstrip("/")
+    base_url = get_base_url(request)
     req = UrlCreateRequest(
         original_url=original_url, title=title, custom_slug=custom_slug
     )

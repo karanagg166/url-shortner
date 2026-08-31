@@ -1,5 +1,6 @@
 from typing import List, Optional
 import strawberry
+from app.api.urls import get_base_url
 from app.core.auth import get_optional_user
 from app.graphql.types import UrlType
 from app.services.url_service import UrlService
@@ -19,7 +20,7 @@ class Query:
     if not user:
       return []
 
-    base_url = str(request.base_url).rstrip("/")
+    base_url = get_base_url(request)
     results = await UrlService.get_user_urls(user_id=user.id, base_url=base_url)
     return [
         UrlType(

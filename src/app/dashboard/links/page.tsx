@@ -15,7 +15,7 @@ import {
   Loader2,
   Plus
 } from "lucide-react";
-import { getUserUrls, deleteUserUrl, type ShortenedUrl } from "@/lib/api";
+import { getUserUrls, deleteUserUrl, formatShortUrl, type ShortenedUrl } from "@/lib/api";
 
 export default function LinksPage() {
   const { session, isLoading: isAuthLoading } = useAuth();
@@ -30,7 +30,11 @@ export default function LinksPage() {
     setError(null);
     try {
       const data = await getUserUrls(session.access_token);
-      setUrls(data);
+      const normalized = data.map((u) => ({
+        ...u,
+        short_url: formatShortUrl(u.short_code, u.short_url),
+      }));
+      setUrls(normalized);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to load links");
     } finally {
@@ -45,9 +49,7 @@ export default function LinksPage() {
   }, [session?.access_token, loadUrls]);
 
   const handleCopy = (code: string, text: string) => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    const cleanUrl = origin ? `${origin}/${code}` : text;
-    navigator.clipboard.writeText(cleanUrl);
+    navigator.clipboard.writeText(text);
     setCopiedCode(code);
     setTimeout(() => setCopiedCode(null), 2000);
   };
@@ -112,12 +114,12 @@ export default function LinksPage() {
                   <div className="min-w-0 flex-1 space-y-1">
                     <div className="flex items-center gap-2">
                       <a
-                        href={typeof window !== "undefined" ? `${window.location.origin}/${item.short_code}` : item.short_url}
+                        href={item.short_url}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="font-mono text-sm font-bold text-blue-600 hover:underline"
                       >
-                        /{item.short_code}
+                        {item.short_url}
                       </a>
                       {item.title && (
                         <span className="text-xs font-semibold text-zinc-700 dark:text-zinc-300 truncate">

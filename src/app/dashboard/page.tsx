@@ -26,7 +26,14 @@ import {
   TrendingUp,
   AlertCircle
 } from "lucide-react";
-import { getUserUrls, shortenUrl, deleteUserUrl, type ShortenedUrl } from "@/lib/api";
+import {
+  getUserUrls,
+  shortenUrl,
+  deleteUserUrl,
+  formatShortUrl,
+  getShortDomain,
+  type ShortenedUrl
+} from "@/lib/api";
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -56,10 +63,9 @@ export default function DashboardPage() {
     setFetchError(null);
     try {
       const data = await getUserUrls(session.access_token);
-      const origin = typeof window !== "undefined" ? window.location.origin : "";
       const normalized = data.map((u) => ({
         ...u,
-        short_url: origin ? `${origin}/${u.short_code}` : u.short_url,
+        short_url: formatShortUrl(u.short_code, u.short_url),
       }));
       setUrls(normalized);
     } catch (err: unknown) {
@@ -103,8 +109,7 @@ export default function DashboardPage() {
         session?.access_token
       );
 
-      const origin = typeof window !== "undefined" ? window.location.origin : "";
-      const displayUrl = origin ? `${origin}/${newLink.short_code}` : newLink.short_url;
+      const displayUrl = formatShortUrl(newLink.short_code, newLink.short_url);
       const normalizedLink = { ...newLink, short_url: displayUrl };
 
       setFormSuccess(normalizedLink);
@@ -138,12 +143,7 @@ export default function DashboardPage() {
   };
 
   const handleCopy = (code: string, text: string) => {
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
-    let cleanUrl = text;
-    if (origin && cleanUrl.includes("localhost:8000")) {
-      cleanUrl = cleanUrl.replace("http://localhost:8000", origin);
-    }
-    navigator.clipboard.writeText(cleanUrl);
+    navigator.clipboard.writeText(text);
     setCopiedCode(code);
     setTimeout(() => {
       setCopiedCode(null);
@@ -474,7 +474,7 @@ export default function DashboardPage() {
                     <div className="flex items-center gap-2.5 flex-wrap">
                       <span className="font-mono font-bold text-sm text-blue-600 dark:text-blue-400 hover:underline">
                         <a href={item.short_url} target="_blank" rel="noopener noreferrer">
-                          /{item.short_code}
+                          {item.short_url}
                         </a>
                       </span>
                       {item.title && (

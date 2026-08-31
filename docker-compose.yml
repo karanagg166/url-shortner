@@ -29,6 +29,7 @@ services:
     environment:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - SHORT_URL_BASE=https://
     depends_on:
       redis:
         condition: service_healthy
@@ -56,6 +57,7 @@ services:
       - NEXT_PUBLIC_SUPABASE_ANON_KEY=sb_publishable_PreIMFnaHXDBR_Rp-8PR5Q_G1V633um
       - NEXT_PUBLIC_API_URL=http://localhost:8000
       - NEXT_PUBLIC_APP_URL=http://localhost:3000
+      - NEXT_PUBLIC_SHORT_DOMAIN=https://
       - WATCHPACK_POLLING=true
       - PORT=3000
       - HOSTNAME=0.0.0.0

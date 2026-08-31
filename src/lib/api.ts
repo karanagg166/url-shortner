@@ -7,6 +7,30 @@ const API_BASE_URL =
       ? ""
       : "http://localhost:8000";
 
+/**
+ * Resolves the clean public short domain for short link display and copying.
+ * Defaults to "https://" so URLs format directly as https://${shortCode}.
+ */
+export function getShortDomain(): string {
+  const customDomain = process.env.NEXT_PUBLIC_SHORT_DOMAIN;
+  if (customDomain && customDomain !== "https://" && !customDomain.includes("localhost")) {
+    return customDomain.replace(/\/$/, "");
+  }
+  return "https://";
+}
+
+/**
+ * Formats a short code as a clean direct HTTPS short URL (e.g., https://YWJKbxC).
+ */
+export function formatShortUrl(shortCode: string, fallbackUrl?: string): string {
+  if (!shortCode) return fallbackUrl || "";
+  const customDomain = process.env.NEXT_PUBLIC_SHORT_DOMAIN;
+  if (customDomain && !customDomain.endsWith("://") && !customDomain.includes("localhost")) {
+    return `${customDomain.replace(/\/$/, "")}/${shortCode}`;
+  }
+  return `https://${shortCode}`;
+}
+
 export interface ShortenedUrl {
   id: string;
   user_id?: string | null;
@@ -53,7 +77,11 @@ export async function shortenUrl(
     throw new Error(errorData.detail || "Failed to shorten URL");
   }
 
-  return response.json();
+  const data: ShortenedUrl = await response.json();
+  return {
+    ...data,
+    short_url: formatShortUrl(data.short_code, data.short_url),
+  };
 }
 
 /**
@@ -72,7 +100,11 @@ export async function getUserUrls(accessToken: string): Promise<ShortenedUrl[]> 
     throw new Error(errorData.detail || "Failed to fetch user URLs");
   }
 
-  return response.json();
+  const data: ShortenedUrl[] = await response.json();
+  return data.map((u) => ({
+    ...u,
+    short_url: formatShortUrl(u.short_code, u.short_url),
+  }));
 }
 
 /**

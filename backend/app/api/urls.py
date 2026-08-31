@@ -10,30 +10,23 @@ from app.services.url_service import UrlService
 router = APIRouter(prefix="/api/urls", tags=["URLs"])
 
 
-def get_base_url(request: Request) -> str:
-  # 1. Environment variable override (e.g. production domain or frontend URL)
-  app_url = os.getenv("APP_URL") or os.getenv("NEXT_PUBLIC_APP_URL")
-  if app_url:
+def get_base_url(request: Optional[Request] = None) -> str:
+  # 1. Environment variable override (e.g. custom short domain or production base URL)
+  app_url = (
+      os.getenv("SHORT_URL_BASE")
+      or os.getenv("NEXT_PUBLIC_SHORT_DOMAIN")
+      or os.getenv("APP_URL")
+  )
+  if app_url and app_url not in ("localhost:3000", "http://localhost:3000", "http://localhost:8000"):
     return app_url.rstrip("/")
 
-  # 2. Check Origin or Referer from frontend request
-  origin = request.headers.get("origin")
-  if origin and "http" in origin:
-    return origin.rstrip("/")
+  if request:
+    # 2. Check Origin or Referer from frontend request (only if public domain)
+    origin = request.headers.get("origin")
+    if origin and "http" in origin and "localhost" not in origin:
+      return origin.rstrip("/")
 
-  referer = request.headers.get("referer")
-  if referer:
-    try:
-      parsed = urlparse(referer)
-      if parsed.scheme and parsed.netloc:
-        return f"{parsed.scheme}://{parsed.netloc}".rstrip("/")
-    except Exception:
-      pass
-
-  # 3. Check forwarded proto/host from reverse proxy or client headers
-  forwarded_proto = request.headers.get("x-forwarded-proto", request.url.scheme)
-  forwarded_host = request.headers.get("x-forwarded-host", request.headers.get("host", "localhost:3000"))
-  return f"{forwarded_proto}://{forwarded_host}".rstrip("/")
+  return "https://"
 
 
 @router.post("", response_model=UrlResponse, status_code=status.HTTP_201_CREATED)
