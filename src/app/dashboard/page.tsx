@@ -526,6 +526,14 @@ export default function DashboardPage() {
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
+                    <Link
+                      href={`/dashboard/links/${item.id}`}
+                      className="px-2.5 py-1 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition cursor-pointer flex items-center gap-1 text-xs"
+                      title="View link analytics"
+                    >
+                      <BarChart3 className="w-3 h-3 text-zinc-500" />
+                      <span>Analytics</span>
+                    </Link>
                     <button
                       type="button"
                       onClick={() => handleCopy(item.short_code, item.short_url)}

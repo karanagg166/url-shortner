@@ -1,5 +1,5 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, status
+from fastapi import FastAPI, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from strawberry.fastapi import GraphQLRouter
@@ -50,7 +50,7 @@ async def health():
 
 # Temporary Redirect (HTTP 302) Route
 @app.get("/{short_code}", response_class=RedirectResponse)
-async def redirect_short_url(short_code: str):
+async def redirect_short_url(short_code: str, request: Request):
   """Resolve short code to original URL and issue HTTP 302 Temporary Redirect."""
   reserved_keywords = {
       "health",
@@ -66,7 +66,7 @@ async def redirect_short_url(short_code: str):
         status_code=status.HTTP_404_NOT_FOUND, detail="Not a valid short code"
     )
 
-  original_url = await UrlService.get_original_url(short_code)
+  original_url = await UrlService.get_original_url(short_code, request=request)
   if not original_url:
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,

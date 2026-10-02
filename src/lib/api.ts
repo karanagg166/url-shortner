@@ -134,3 +134,107 @@ export async function deleteUserUrl(
 
   return response.json();
 }
+
+export interface TimelineItem {
+  date: string;
+  clicks: number;
+}
+
+export interface CountryItem {
+  country: string;
+  clicks: number;
+  percentage: number;
+}
+
+export interface CityItem {
+  city: string;
+  country: string;
+  clicks: number;
+}
+
+export interface ReferrerItem {
+  source: string;
+  clicks: number;
+  percentage: number;
+}
+
+export interface DeviceItem {
+  device: string;
+  clicks: number;
+  percentage: number;
+}
+
+export interface BrowserItem {
+  browser: string;
+  clicks: number;
+  percentage: number;
+}
+
+export interface OSItem {
+  os: string;
+  clicks: number;
+  percentage: number;
+}
+
+export interface RecentClickItem {
+  clicked_at: string;
+  country?: string | null;
+  region?: string | null;
+  city?: string | null;
+  referrer?: string | null;
+  referrer_domain?: string | null;
+  device_type?: string | null;
+  browser?: string | null;
+  os?: string | null;
+}
+
+export interface UrlAnalytics {
+  url_id: string;
+  short_code: string;
+  original_url: string;
+  title?: string | null;
+  total_clicks: number;
+  unique_visitors: number;
+  clicks_today: number;
+  clicks_7d: number;
+  clicks_30d: number;
+  bot_clicks: number;
+  last_clicked_at?: string | null;
+  timeline: TimelineItem[];
+  countries: CountryItem[];
+  cities: CityItem[];
+  referrers: ReferrerItem[];
+  devices: DeviceItem[];
+  browsers: BrowserItem[];
+  operating_systems: OSItem[];
+  recent_clicks: RecentClickItem[];
+}
+
+/**
+ * Fetch detailed analytics for an owned shortened URL.
+ */
+export async function getUrlAnalytics(
+  urlId: string,
+  accessToken: string,
+  range: string = "30d"
+): Promise<UrlAnalytics> {
+  const response = await fetch(
+    `${API_BASE_URL}/api/urls/${urlId}/analytics?range=${encodeURIComponent(range)}`,
+    {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const errorData = await response
+      .json()
+      .catch(() => ({ detail: "Failed to fetch analytics" }));
+    throw new Error(errorData.detail || "Failed to fetch analytics");
+  }
+
+  return response.json();
+}
+

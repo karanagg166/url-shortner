@@ -4,7 +4,10 @@ from urllib.parse import urlparse
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.responses import RedirectResponse
 from app.core.auth import AuthUser, get_current_user, get_optional_user
+from app.core.supabase import get_supabase
+from app.models.analytics import UrlAnalyticsResponse
 from app.models.url import UrlCreateRequest, UrlResponse
+from app.services.analytics_service import AnalyticsService
 from app.services.url_service import UrlService
 
 router = APIRouter(prefix="/api/urls", tags=["URLs"])
@@ -112,9 +115,9 @@ async def delete_url(
 
 
 @router.get("/resolve/{short_code}", response_class=RedirectResponse)
-async def resolve_short_url(short_code: str):
+async def resolve_short_url(short_code: str, request: Request):
   """Resolve short code to original URL and issue HTTP 302 Temporary Redirect."""
-  original_url = await UrlService.get_original_url(short_code)
+  original_url = await UrlService.get_original_url(short_code, request=request)
   if not original_url:
     raise HTTPException(
         status_code=status.HTTP_404_NOT_FOUND,
@@ -127,4 +130,52 @@ async def resolve_short_url(short_code: str):
           "Cache-Control": "no-store",
       },
   )
+
+
+@router.get("/{url_id}/analytics", response_model=UrlAnalyticsResponse)
+async def get_url_analytics(
+    url_id: str,
+    range: str = "30d",
+    current_user: AuthUser = Depends(get_current_user),
+):
+  """Retrieve detailed analytics for an owned shortened URL.
+
+  Verifies that the URL belongs to the authenticated user.
+  Supports range parameter: 7d, 30d, 90d, all.
+  """
+  supabase = get_supabase()
+  if not supabase:
+    raise HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail="Database client not initialized",
+    )
+
+  fetch = (
+      supabase.table("urls")
+      .select("id, user_id, short_code, original_url, title, clicks_count, created_at, updated_at")
+      .eq("id", url_id)
+      .maybe_single()
+      .execute()
+  )
+  if not fetch or not fetch.data:
+    raise HTTPException(
+        status_code=status.HTTP_404_NOT_FOUND,
+        detail="URL not found",
+    )
+
+  if fetch.data.get("user_id") != current_user.id:
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="You do not have permission to view analytics for this URL",
+    )
+
+  valid_ranges = {"7d", "30d", "90d", "all"}
+  clean_range = range.lower() if range.lower() in valid_ranges else "30d"
+
+  analytics = await AnalyticsService.get_url_analytics(
+      url_record=fetch.data,
+      time_range=clean_range,
+  )
+  return analytics
+
 

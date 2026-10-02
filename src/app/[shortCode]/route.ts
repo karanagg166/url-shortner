@@ -41,10 +41,32 @@ export async function GET(
   ).replace(/\/$/, "");
 
   try {
+    const forwardHeaders: Record<string, string> = {};
+    const userAgent = request.headers.get("user-agent");
+    if (userAgent) forwardHeaders["user-agent"] = userAgent;
+
+    const referer = request.headers.get("referer") || request.headers.get("referrer");
+    if (referer) forwardHeaders["referer"] = referer;
+
+    const forwardedFor = request.headers.get("x-forwarded-for");
+    const realIp = request.headers.get("x-real-ip");
+    const clientIp = forwardedFor ? forwardedFor.split(",")[0].trim() : realIp;
+    if (clientIp) forwardHeaders["x-forwarded-for"] = clientIp;
+
+    const country = request.headers.get("x-vercel-ip-country");
+    if (country) forwardHeaders["x-vercel-ip-country"] = country;
+
+    const region = request.headers.get("x-vercel-ip-country-region");
+    if (region) forwardHeaders["x-vercel-ip-country-region"] = region;
+
+    const city = request.headers.get("x-vercel-ip-city");
+    if (city) forwardHeaders["x-vercel-ip-city"] = city;
+
     const res = await fetch(
       `${backendBase}/api/urls/resolve/${encodeURIComponent(shortCode)}`,
       {
         method: "GET",
+        headers: forwardHeaders,
         redirect: "manual",
       }
     );

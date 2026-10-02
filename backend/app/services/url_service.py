@@ -3,9 +3,12 @@ import os
 import re
 from typing import List, Optional
 from urllib.parse import urlparse
+from fastapi import Request
 from app.core.redis import get_redis
 from app.core.supabase import get_supabase
 from app.models.url import UrlCreateRequest, UrlResponse, UrlStatsResponse
+from app.services.analytics_service import AnalyticsService
+
 
 
 class UrlService:
@@ -169,6 +172,7 @@ class UrlService:
     if redis:
       try:
         await redis.set(f"url:{short_code}", raw_url, ex=604800)
+        await redis.set(f"url_id:{short_code}", record["id"], ex=604800)
         await redis.set(f"clicks:{short_code}", 0)
       except Exception as e:
         print(f"Warning: Redis cache set failed: {e}")
@@ -242,10 +246,12 @@ class UrlService:
     return urls
 
   @classmethod
-  async def get_original_url(cls, short_code: str) -> Optional[str]:
+  async def get_original_url(
+      cls, short_code: str, request: Optional[Request] = None
+  ) -> Optional[str]:
     """Resolve short code to original URL using Redis-first caching strategy,
 
-    and increment click metrics.
+    increment click metrics, and record privacy-conscious click analytics event.
     """
     redis = get_redis()
     supabase = get_supabase()
@@ -263,17 +269,49 @@ class UrlService:
             ).execute()
           except Exception:
             # Fallback direct update
-            supabase.table("urls").update({
-                "clicks_count": (
+            try:
+              supabase.table("urls").update({
+                  "clicks_count": (
+                      supabase.table("urls")
+                      .select("clicks_count")
+                      .eq("short_code", short_code)
+                      .single()
+                      .execute()
+                      .data.get("clicks_count", 0)
+                      + 1
+                  )
+              }).eq("short_code", short_code).execute()
+            except Exception:
+              pass
+
+          # Record click event if request context is provided
+          if request:
+            cached_url_id = await redis.get(f"url_id:{short_code}")
+            if not cached_url_id and supabase:
+              try:
+                fetch_rec = (
                     supabase.table("urls")
-                    .select("clicks_count")
+                    .select("id")
                     .eq("short_code", short_code)
-                    .single()
+                    .maybe_single()
                     .execute()
-                    .data.get("clicks_count", 0)
-                    + 1
                 )
-            }).eq("short_code", short_code).execute()
+                if fetch_rec and fetch_rec.data:
+                  cached_url_id = fetch_rec.data["id"]
+                  await redis.set(f"url_id:{short_code}", cached_url_id, ex=604800)
+              except Exception:
+                pass
+
+            if cached_url_id:
+              try:
+                await AnalyticsService.record_click_event(
+                    short_code=short_code,
+                    url_id=cached_url_id,
+                    request=request,
+                )
+              except Exception as err:
+                print(f"Warning: Failed to record click event: {err}")
+
           return cached_url
       except Exception as e:
         print(f"Redis cache lookup error: {e}")
@@ -295,23 +333,39 @@ class UrlService:
       return None
 
     original_url = data["original_url"]
+    url_id = data["id"]
     new_clicks = data.get("clicks_count", 0) + 1
 
-    # Update DB click counter
+    # Update DB click counter atomically
     try:
-      supabase.table("urls").update({"clicks_count": new_clicks}).eq(
-          "short_code", short_code
-      ).execute()
-    except Exception as e:
-      print(f"Failed to update clicks in DB: {e}")
+      supabase.rpc("increment_clicks", {"slug": short_code}).execute()
+    except Exception:
+      try:
+        supabase.table("urls").update({"clicks_count": new_clicks}).eq(
+            "short_code", short_code
+        ).execute()
+      except Exception as e:
+        print(f"Failed to update clicks in DB: {e}")
 
     # 3. Populate Redis Cache
     if redis:
       try:
         await redis.set(f"url:{short_code}", original_url, ex=604800)
+        await redis.set(f"url_id:{short_code}", url_id, ex=604800)
         await redis.set(f"clicks:{short_code}", new_clicks)
       except Exception as e:
         print(f"Failed to set Redis cache: {e}")
+
+    # Record click event if request context is provided
+    if request:
+      try:
+        await AnalyticsService.record_click_event(
+            short_code=short_code,
+            url_id=url_id,
+            request=request,
+        )
+      except Exception as err:
+        print(f"Warning: Failed to record click event: {err}")
 
     return original_url
 
@@ -335,7 +389,7 @@ class UrlService:
 
     short_code = fetch.data["short_code"]
 
-    # Delete from DB
+    # Delete from DB (click_events cascaded automatically)
     supabase.table("urls").delete().eq("id", url_id).eq(
         "user_id", user_id
     ).execute()
@@ -344,6 +398,7 @@ class UrlService:
     if redis:
       try:
         await redis.delete(f"url:{short_code}")
+        await redis.delete(f"url_id:{short_code}")
         await redis.delete(f"clicks:{short_code}")
       except Exception:
         pass
