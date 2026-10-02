@@ -25,12 +25,18 @@ export async function GET(
     return NextResponse.next();
   }
 
-  const origin = request.nextUrl.origin;
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
   const isProd = process.env.NODE_ENV === "production";
+  const publicOrigin =
+    isProd && forwardedHost
+      ? `${forwardedProto}://${forwardedHost}`
+      : request.nextUrl.origin;
+
   const backendBase = (
     process.env.INTERNAL_API_URL ||
-    (isProd && !origin.includes("localhost")
-      ? origin
+    (isProd && !publicOrigin.includes("localhost")
+      ? publicOrigin
       : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000")
   ).replace(/\/$/, "");
 
@@ -62,5 +68,5 @@ export async function GET(
     console.error("Short code redirection error:", err);
   }
 
-  return NextResponse.redirect(new URL("/not-found", request.url));
+  return NextResponse.redirect(new URL("/not-found", publicOrigin));
 }

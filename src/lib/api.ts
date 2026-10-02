@@ -14,7 +14,12 @@ const API_BASE_URL =
  */
 export function getShortDomain(): string {
   const customDomain = process.env.NEXT_PUBLIC_SHORT_DOMAIN || process.env.NEXT_PUBLIC_APP_URL;
-  if (customDomain && customDomain !== "https://" && customDomain !== "http://") {
+  if (
+    customDomain &&
+    customDomain !== "https://" &&
+    customDomain !== "http://" &&
+    (!isProd || !customDomain.includes("localhost"))
+  ) {
     return customDomain.replace(/\/$/, "");
   }
   if (typeof window !== "undefined") {

@@ -8,11 +8,25 @@ export async function GET(request: Request) {
   const error = searchParams.get("error");
   const errorDescription = searchParams.get("error_description");
 
+  // Determine true public origin (handling Vercel proxy, load balancers, and localhost)
+  const forwardedHost = request.headers.get("x-forwarded-host");
+  const forwardedProto = request.headers.get("x-forwarded-proto") || "https";
+  const isLocalEnv = process.env.NODE_ENV === "development";
+
+  const redirectBase =
+    !isLocalEnv && forwardedHost
+      ? `${forwardedProto}://${forwardedHost}`
+      : origin.includes("localhost") && !isLocalEnv && process.env.NEXT_PUBLIC_APP_URL && !process.env.NEXT_PUBLIC_APP_URL.includes("localhost")
+        ? process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")
+        : origin;
+
+  const targetPath = next.startsWith("/") ? next : `/${next}`;
+
   // Handle incoming OAuth provider errors
   if (error || errorDescription) {
     const errorMsg = errorDescription || error || "auth_failed";
     return NextResponse.redirect(
-      `${origin}/login?error=${encodeURIComponent(errorMsg)}`
+      `${redirectBase}/login?error=${encodeURIComponent(errorMsg)}`
     );
   }
 
@@ -45,16 +59,16 @@ export async function GET(request: Request) {
         console.error("Failed to sync profile in callback route:", e);
       }
 
-      return NextResponse.redirect(`${origin}${next}`);
+      return NextResponse.redirect(`${redirectBase}${targetPath}`);
     }
 
     if (exchangeError) {
       return NextResponse.redirect(
-        `${origin}/login?error=${encodeURIComponent(exchangeError.message)}`
+        `${redirectBase}/login?error=${encodeURIComponent(exchangeError.message)}`
       );
     }
   }
 
   // If error or no code, redirect to login with error param
-  return NextResponse.redirect(`${origin}/login?error=auth_failed`);
+  return NextResponse.redirect(`${redirectBase}/login?error=auth_failed`);
 }

@@ -151,7 +151,14 @@ export async function signInWithEmail({ email, password }: SignInParams) {
  */
 export async function signInWithOAuth(provider: OAuthProvider) {
   try {
-    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    const origin =
+      typeof window !== "undefined" && window.location.origin
+        ? window.location.origin.replace(/\/$/, "")
+        : process.env.NEXT_PUBLIC_APP_URL &&
+            (process.env.NODE_ENV !== "production" ||
+              !process.env.NEXT_PUBLIC_APP_URL.includes("localhost"))
+          ? process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")
+          : "";
     const { data, error } = await supabase.auth.signInWithOAuth({
       provider,
       options: {
