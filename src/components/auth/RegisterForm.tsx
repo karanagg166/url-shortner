@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useAuth } from "@/hooks/useAuth";
 import {
   User,
@@ -16,6 +16,7 @@ import {
 
 export default function RegisterForm() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { signUp, loginWithOAuth } = useAuth();
 
   const [fullName, setFullName] = useState("");
@@ -27,7 +28,14 @@ export default function RegisterForm() {
   const [agreeTerms, setAgreeTerms] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const errorParam = searchParams.get("error_description") || searchParams.get("error");
+  const initialError = errorParam
+    ? errorParam === "auth_failed"
+      ? "Authentication session expired or failed. Please try again."
+      : decodeURIComponent(errorParam.replace(/\+/g, " "))
+    : null;
+
+  const [errorMessage, setErrorMessage] = useState<string | null>(initialError);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   // Password Strength Calculation

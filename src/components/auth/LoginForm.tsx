@@ -26,11 +26,14 @@ export default function LoginForm() {
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [oauthLoading, setOauthLoading] = useState<string | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(
-    searchParams.get("error") === "auth_failed"
+  const errorParam = searchParams.get("error_description") || searchParams.get("error");
+  const initialError = errorParam
+    ? errorParam === "auth_failed"
       ? "Authentication session expired or failed. Please sign in again."
-      : null
-  );
+      : decodeURIComponent(errorParam.replace(/\+/g, " "))
+    : null;
+
+  const [errorMessage, setErrorMessage] = useState<string | null>(initialError);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const handleSubmit = async (e: React.FormEvent) => {

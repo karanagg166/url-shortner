@@ -5,12 +5,22 @@ export async function GET(request: Request) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/dashboard";
+  const error = searchParams.get("error");
+  const errorDescription = searchParams.get("error_description");
+
+  // Handle incoming OAuth provider errors
+  if (error || errorDescription) {
+    const errorMsg = errorDescription || error || "auth_failed";
+    return NextResponse.redirect(
+      `${origin}/login?error=${encodeURIComponent(errorMsg)}`
+    );
+  }
 
   if (code) {
     const supabase = await createClient();
-    const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+    const { data, error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
 
-    if (!error && data.user) {
+    if (!exchangeError && data.user) {
       // Sync user profile to database table
       const user = data.user;
       const fullName =
@@ -36,6 +46,12 @@ export async function GET(request: Request) {
       }
 
       return NextResponse.redirect(`${origin}${next}`);
+    }
+
+    if (exchangeError) {
+      return NextResponse.redirect(
+        `${origin}/login?error=${encodeURIComponent(exchangeError.message)}`
+      );
     }
   }
 
