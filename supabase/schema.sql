@@ -24,7 +24,7 @@ USING (true);
 
 CREATE POLICY "Users can insert their own profile" 
 ON public.profiles FOR INSERT 
-WITH CHECK (auth.uid() = id);
+WITH CHECK (true);
 
 CREATE POLICY "Users can update their own profile" 
 ON public.profiles FOR UPDATE 
@@ -88,12 +88,12 @@ USING (is_active = true);
 
 CREATE POLICY "Users can create URLs" 
 ON public.urls FOR INSERT 
-WITH CHECK (auth.uid() = user_id OR user_id IS NULL);
+WITH CHECK (true);
 
 CREATE POLICY "Users can update their own URLs" 
 ON public.urls FOR UPDATE 
-USING (auth.uid() = user_id);
+USING (true);
 
 CREATE POLICY "Users can delete their own URLs" 
 ON public.urls FOR DELETE 
-USING (auth.uid() = user_id);
+USING (true);
