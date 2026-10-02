@@ -48,10 +48,10 @@ async def health():
   return {"status": "healthy", "service": "url-shortener-backend"}
 
 
-# Permanent Redirect (HTTP 301) Route
+# Temporary Redirect (HTTP 302) Route
 @app.get("/{short_code}", response_class=RedirectResponse)
 async def redirect_short_url(short_code: str):
-  """Resolve short code to original URL and issue HTTP 301 Permanent Redirect."""
+  """Resolve short code to original URL and issue HTTP 302 Temporary Redirect."""
   reserved_keywords = {
       "health",
       "graphql",
@@ -75,8 +75,8 @@ async def redirect_short_url(short_code: str):
 
   return RedirectResponse(
       url=original_url,
-      status_code=status.HTTP_301_MOVED_PERMANENTLY,
+      status_code=status.HTTP_302_FOUND,
       headers={
-          "Cache-Control": "public, max-age=86400, s-maxage=86400, stale-while-revalidate=3600"
+          "Cache-Control": "no-store",
       },
   )

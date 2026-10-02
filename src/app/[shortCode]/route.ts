@@ -54,11 +54,8 @@ export async function GET(
         // Analytics failure should never block redirect
       }
 
-      const response = NextResponse.redirect(location, 301);
-      response.headers.set(
-        "Cache-Control",
-        "public, max-age=86400, s-maxage=86400, stale-while-revalidate=3600"
-      );
+      const response = NextResponse.redirect(location, 302);
+      response.headers.set("Cache-Control", "no-store");
       return response;
     }
   } catch (err) {

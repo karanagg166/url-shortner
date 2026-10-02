@@ -23,7 +23,7 @@ export interface ShortenedItem {
   shortUrl: string;
   alias: string;
   createdAt: string;
-  clicks: number;
+  clicks?: number;
 }
 
 export default function UrlShortenerHero() {
@@ -327,9 +327,6 @@ export default function UrlShortenerHero() {
                   <div className="flex items-center gap-2 flex-wrap">
                     <span className="font-mono font-medium text-zinc-900 dark:text-zinc-100">
                       {item.shortUrl}
-                    </span>
-                    <span className="text-[11px] text-zinc-400">
-                      · {item.clicks} {item.clicks === 1 ? "click" : "clicks"}
                     </span>
                   </div>
                   <p className="text-zinc-500 dark:text-zinc-400 truncate max-w-md">
