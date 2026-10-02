@@ -1,9 +1,32 @@
+import os
 from typing import Optional
 from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+import jwt
 from app.core.supabase import get_supabase
 
 security = HTTPBearer(auto_error=False)
+
+_jwks_client: Optional[jwt.PyJWKClient] = None
+
+
+def get_jwks_client() -> Optional[jwt.PyJWKClient]:
+  global _jwks_client
+  if _jwks_client is None:
+    jwks_url = (
+        os.getenv("SUPABASE_JWKS_URL")
+        or (
+            f"{os.getenv('SUPABASE_URL', '').rstrip('/')}/auth/v1/.well-known/jwks.json"
+            if os.getenv("SUPABASE_URL")
+            else None
+        )
+    )
+    if jwks_url and not jwks_url.startswith("/"):
+      try:
+        _jwks_client = jwt.PyJWKClient(jwks_url)
+      except Exception:
+        _jwks_client = None
+  return _jwks_client
 
 
 class AuthUser:
@@ -34,28 +57,40 @@ async def get_current_user(
 
   # 1. Check Bearer token from Supabase
   if token:
+    # 1A. Try Supabase client auth verification
     supabase = get_supabase()
-    if not supabase:
-      raise HTTPException(
-          status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-          detail="Supabase client not initialized",
-      )
+    if supabase:
+      try:
+        user_response = supabase.auth.get_user(token)
+        if user_response and user_response.user:
+          return AuthUser(
+              id=str(user_response.user.id), email=user_response.user.email
+          )
+      except Exception:
+        # Fall back to cryptographic JWKS verification
+        pass
 
+    # 1B. Cryptographic JWKS fallback (supports ES256 & HS256)
     try:
-      user_response = supabase.auth.get_user(token)
-      if user_response and user_response.user:
-        return AuthUser(
-            id=str(user_response.user.id), email=user_response.user.email
+      jwks_client = get_jwks_client()
+      if jwks_client:
+        signing_key = jwks_client.get_signing_key_from_jwt(token)
+        payload = jwt.decode(
+            token,
+            signing_key.key,
+            algorithms=["ES256", "HS256"],
+            options={"verify_aud": False},
         )
-      raise HTTPException(
-          status_code=status.HTTP_401_UNAUTHORIZED,
-          detail="Invalid or expired authentication token",
-      )
-    except Exception as e:
-      raise HTTPException(
-          status_code=status.HTTP_401_UNAUTHORIZED,
-          detail=f"Authentication failed: {str(e)}",
-      )
+        user_id = payload.get("sub")
+        if user_id:
+          return AuthUser(id=str(user_id), email=payload.get("email"))
+    except Exception:
+      pass
+
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Invalid or expired authentication token",
+    )
 
   # 2. Check X-User-Id header for development/testing environments
   dev_user_id = request.headers.get("x-user-id") or request.headers.get(

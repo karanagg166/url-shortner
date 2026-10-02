@@ -512,7 +512,7 @@ export default function DashboardPage() {
                     </p>
 
                     <div className="flex items-center gap-4 text-[11px] text-zinc-400 dark:text-zinc-500">
-                      <span>
+                      <span suppressHydrationWarning>
                         {new Date(item.created_at).toLocaleDateString(undefined, {
                           month: "short",
                           day: "numeric",

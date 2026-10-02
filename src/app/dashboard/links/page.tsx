@@ -153,7 +153,7 @@ export default function LinksPage() {
                     </div>
                     <p className="text-zinc-500 truncate max-w-md">{item.original_url}</p>
                     <div className="flex items-center gap-3 text-[11px] text-zinc-400">
-                      <span>{new Date(item.created_at).toLocaleDateString()}</span>
+                      <span suppressHydrationWarning>{new Date(item.created_at).toLocaleDateString()}</span>
                       <span>
                         {item.clicks_count} {item.clicks_count === 1 ? "click" : "clicks"}
                       </span>

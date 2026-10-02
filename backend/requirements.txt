@@ -11,4 +11,5 @@ sqlalchemy>=2.0.0
 httpx>=0.28.0
 asyncpg
 alembic
-pydantic-settings
+PyJWT>=2.8.0
+cryptography>=42.0.0

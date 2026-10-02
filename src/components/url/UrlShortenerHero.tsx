@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useSyncExternalStore, useMemo } from "react";
 import Link from "next/link";
 import { track } from "@vercel/analytics";
 import { useAuth } from "@/hooks/useAuth";
@@ -26,6 +26,36 @@ export interface ShortenedItem {
   clicks?: number;
 }
 
+const EMPTY_STORAGE = "[]";
+
+function subscribe(callback: () => void) {
+  window.addEventListener("storage", callback);
+  window.addEventListener("shortlink_storage_update", callback);
+  return () => {
+    window.removeEventListener("storage", callback);
+    window.removeEventListener("shortlink_storage_update", callback);
+  };
+}
+
+function getSnapshot(): string {
+  if (typeof window === "undefined") return EMPTY_STORAGE;
+  try {
+    return localStorage.getItem("shortlink_recent_urls") || EMPTY_STORAGE;
+  } catch {
+    return EMPTY_STORAGE;
+  }
+}
+
+function getServerSnapshot(): string {
+  return EMPTY_STORAGE;
+}
+
+function notifyStorageChange() {
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("shortlink_storage_update"));
+  }
+}
+
 export default function UrlShortenerHero() {
   const { session } = useAuth();
   const [url, setUrl] = useState("");
@@ -37,16 +67,15 @@ export default function UrlShortenerHero() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [latestCreated, setLatestCreated] = useState<ShortenedItem | null>(null);
 
-  // Initialize links lazily from localStorage to avoid cascading render effects
-  const [links, setLinks] = useState<ShortenedItem[]>(() => {
-    if (typeof window === "undefined") return [];
+  // Synchronize with localStorage safely using useSyncExternalStore to avoid SSR hydration mismatch
+  const storedJson = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
+  const links = useMemo<ShortenedItem[]>(() => {
     try {
-      const saved = localStorage.getItem("shortlink_recent_urls");
-      return saved ? JSON.parse(saved) : [];
+      return JSON.parse(storedJson);
     } catch {
       return [];
     }
-  });
+  }, [storedJson]);
 
   const handleShorten = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -96,15 +125,13 @@ export default function UrlShortenerHero() {
       };
 
       setLatestCreated(newItem);
-      setLinks((prev) => {
-        const updated = [newItem, ...prev.filter((i) => i.id !== newItem.id).slice(0, 7)];
-        try {
-          localStorage.setItem("shortlink_recent_urls", JSON.stringify(updated));
-        } catch {
-          // Ignore storage issues
-        }
-        return updated;
-      });
+      const updated = [newItem, ...links.filter((i) => i.id !== newItem.id).slice(0, 7)];
+      try {
+        localStorage.setItem("shortlink_recent_urls", JSON.stringify(updated));
+        notifyStorageChange();
+      } catch {
+        // Ignore storage issues
+      }
 
       // Track analytics event (no personal information or full raw URL)
       try {
@@ -141,9 +168,9 @@ export default function UrlShortenerHero() {
   };
 
   const handleClearHistory = () => {
-    setLinks([]);
     try {
       localStorage.removeItem("shortlink_recent_urls");
+      notifyStorageChange();
     } catch {
       // Ignore
     }
