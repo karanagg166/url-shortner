@@ -7,6 +7,8 @@ const RESERVED_PATHS = new Set([
   "dashboard",
   "login",
   "register",
+  "not-found",
+  "docs",
   "favicon.ico",
   "robots.txt",
   "sitemap.xml",
@@ -27,7 +29,9 @@ export async function GET(
   const isProd = process.env.NODE_ENV === "production";
   const backendBase = (
     process.env.INTERNAL_API_URL ||
-    (isProd ? origin : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000")
+    (isProd && !origin.includes("localhost")
+      ? origin
+      : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000")
   ).replace(/\/$/, "");
 
   try {
