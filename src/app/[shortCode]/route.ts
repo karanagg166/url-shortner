@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { track } from "@vercel/analytics/server";
 
 const RESERVED_PATHS = new Set([
   "api",
@@ -23,19 +24,32 @@ export async function GET(
   }
 
   const origin = request.nextUrl.origin;
+  const isProd = process.env.NODE_ENV === "production";
   const backendBase = (
     process.env.INTERNAL_API_URL ||
-    (process.env.NODE_ENV !== "production" ? "http://backend:8000" : origin)
+    (isProd ? origin : process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000")
   ).replace(/\/$/, "");
 
   try {
-    const res = await fetch(`${backendBase}/api/urls/resolve/${encodeURIComponent(shortCode)}`, {
-      method: "GET",
-      redirect: "manual",
-    });
+    const res = await fetch(
+      `${backendBase}/api/urls/resolve/${encodeURIComponent(shortCode)}`,
+      {
+        method: "GET",
+        redirect: "manual",
+      }
+    );
 
     const location = res.headers.get("location");
     if (location) {
+      // Track short URL visit/redirect event in Vercel Web Analytics
+      try {
+        await track("short_url_redirected", {
+          short_code: shortCode,
+        });
+      } catch {
+        // Analytics failure should never block redirect
+      }
+
       const response = NextResponse.redirect(location, 301);
       response.headers.set(
         "Cache-Control",

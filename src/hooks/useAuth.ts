@@ -10,7 +10,6 @@ import {
   getCurrentUserProfile,
 } from "@/lib/auth";
 import type {
-  AuthState,
   UserProfile,
   SignUpParams,
   SignInParams,

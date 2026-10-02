@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import Link from "next/link";
+import { track } from "@vercel/analytics";
 import { useAuth } from "@/hooks/useAuth";
 import { shortenUrl, formatShortUrl, getShortDomain } from "@/lib/api";
 import {
@@ -10,17 +11,13 @@ import {
   Check,
   ExternalLink,
   QrCode,
-  Sparkles,
-  ArrowRight,
-  ShieldCheck,
-  Zap,
-  Clock,
-  ChevronRight,
-  Sliders,
-  X
+  SlidersHorizontal,
+  X,
+  Loader2,
+  Trash2,
 } from "lucide-react";
 
-interface ShortenedItem {
+export interface ShortenedItem {
   id: string;
   originalUrl: string;
   shortUrl: string;
@@ -33,25 +30,23 @@ export default function UrlShortenerHero() {
   const { session } = useAuth();
   const [url, setUrl] = useState("");
   const [customAlias, setCustomAlias] = useState("");
-  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [showCustomAlias, setShowCustomAlias] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [activeQrItem, setActiveQrItem] = useState<ShortenedItem | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [latestCreated, setLatestCreated] = useState<ShortenedItem | null>(null);
 
-  // Initial links state with localStorage persistence
-  const [links, setLinks] = useState<ShortenedItem[]>([]);
-
-  useEffect(() => {
+  // Initialize links lazily from localStorage to avoid cascading render effects
+  const [links, setLinks] = useState<ShortenedItem[]>(() => {
+    if (typeof window === "undefined") return [];
     try {
       const saved = localStorage.getItem("shortlink_recent_urls");
-      if (saved) {
-        setLinks(JSON.parse(saved));
-      }
+      return saved ? JSON.parse(saved) : [];
     } catch {
-      // Ignore
+      return [];
     }
-  }, []);
+  });
 
   const handleShorten = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,7 +54,7 @@ export default function UrlShortenerHero() {
 
     let trimmed = url.trim();
     if (!trimmed) {
-      setErrorMessage("Please enter a valid URL to shorten.");
+      setErrorMessage("Please enter a URL to shorten.");
       return;
     }
 
@@ -70,13 +65,14 @@ export default function UrlShortenerHero() {
     try {
       new URL(trimmed);
     } catch {
-      setErrorMessage("Invalid URL format. Please include a valid domain (e.g. example.com).");
+      setErrorMessage("Please enter a valid URL (e.g. example.com).");
       return;
     }
 
     setIsLoading(true);
 
     try {
+      const hasCustomSlug = Boolean(customAlias.trim());
       const result = await shortenUrl(
         {
           original_url: trimmed,
@@ -92,19 +88,34 @@ export default function UrlShortenerHero() {
         originalUrl: result.original_url,
         shortUrl: displayShortUrl,
         alias: result.short_code,
-        createdAt: "Just now",
+        createdAt: new Date().toLocaleDateString(undefined, {
+          month: "short",
+          day: "numeric",
+        }),
         clicks: result.clicks_count || 0,
       };
 
+      setLatestCreated(newItem);
       setLinks((prev) => {
-        const updated = [newItem, ...prev.filter((i) => i.id !== newItem.id).slice(0, 4)];
+        const updated = [newItem, ...prev.filter((i) => i.id !== newItem.id).slice(0, 7)];
         try {
           localStorage.setItem("shortlink_recent_urls", JSON.stringify(updated));
         } catch {
-          // Ignore
+          // Ignore storage issues
         }
         return updated;
       });
+
+      // Track analytics event (no personal information or full raw URL)
+      try {
+        track("url_shortened", {
+          has_custom_slug: hasCustomSlug,
+          is_authenticated: Boolean(session),
+        });
+      } catch {
+        // Safe fallback if analytics blocked
+      }
+
       setUrl("");
       setCustomAlias("");
     } catch (err: unknown) {
@@ -117,262 +128,300 @@ export default function UrlShortenerHero() {
   const handleCopy = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
+
+    try {
+      track("short_url_copied");
+    } catch {
+      // Safe fallback
+    }
+
     setTimeout(() => {
       setCopiedId(null);
     }, 2000);
   };
 
-  return (
-    <div className="w-full max-w-4xl mx-auto">
-      {/* Interactive URL Shortener Card */}
-      <div className="relative group">
-        {/* Glow effect behind card */}
-        <div className="absolute -inset-1 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 rounded-3xl blur-xl opacity-30 group-hover:opacity-40 transition duration-500" />
+  const handleClearHistory = () => {
+    setLinks([]);
+    try {
+      localStorage.removeItem("shortlink_recent_urls");
+    } catch {
+      // Ignore
+    }
+  };
 
-        <div className="relative bg-white dark:bg-zinc-900/90 border border-zinc-200/90 dark:border-zinc-800 rounded-2xl sm:rounded-3xl p-5 sm:p-7 shadow-2xl backdrop-blur-xl">
-          <form onSubmit={handleShorten} className="space-y-4">
-            <div className="flex flex-col sm:flex-row gap-3">
-              {/* URL Input */}
-              <div className="relative flex-1">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-zinc-400">
-                  <Link2 className="w-5 h-5 text-blue-500" />
-                </div>
+  return (
+    <div className="w-full max-w-3xl mx-auto space-y-6">
+      {/* Shortener Card */}
+      <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 sm:p-6 shadow-sm">
+        <form onSubmit={handleShorten} className="space-y-3.5">
+          <div className="flex flex-col sm:flex-row gap-2.5">
+            {/* Main URL Input */}
+            <div className="relative flex-1">
+              <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-zinc-400">
+                <Link2 className="w-4 h-4" />
+              </div>
+              <input
+                type="text"
+                required
+                value={url}
+                onChange={(e) => setUrl(e.target.value)}
+                placeholder="Paste long link here (e.g. https://github.com/my/project)..."
+                className="w-full pl-10 pr-3 py-2.5 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-300 dark:border-zinc-700 rounded-lg text-sm placeholder:text-zinc-400 text-zinc-900 dark:text-zinc-100 focus:bg-white dark:focus:bg-zinc-800 focus:outline-none focus:ring-1 focus:ring-zinc-500 focus:border-zinc-500 transition"
+              />
+            </div>
+
+            {/* Submit Button */}
+            <button
+              type="submit"
+              disabled={isLoading}
+              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-zinc-900 hover:bg-zinc-800 text-white dark:bg-zinc-100 dark:hover:bg-zinc-200 dark:text-zinc-900 font-medium text-sm rounded-lg transition disabled:opacity-60 cursor-pointer shrink-0"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  <span>Shortening...</span>
+                </>
+              ) : (
+                <span>Shorten</span>
+              )}
+            </button>
+          </div>
+
+          {/* Toggle Custom Slug */}
+          <div className="flex items-center justify-between text-xs pt-0.5">
+            <button
+              type="button"
+              onClick={() => setShowCustomAlias(!showCustomAlias)}
+              className="inline-flex items-center gap-1.5 text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 transition cursor-pointer"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>{showCustomAlias ? "Hide custom alias" : "Customize alias (optional)"}</span>
+            </button>
+            <span className="text-zinc-400 dark:text-zinc-500 hidden sm:inline">
+              Instant redirect · Click tracking
+            </span>
+          </div>
+
+          {/* Custom Slug Input */}
+          {showCustomAlias && (
+            <div className="pt-1">
+              <label
+                htmlFor="custom-alias"
+                className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1"
+              >
+                Custom Alias
+              </label>
+              <div className="flex items-center rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-300 dark:border-zinc-700 overflow-hidden focus-within:ring-1 focus-within:ring-zinc-500 focus-within:border-zinc-500">
+                <span className="px-3 py-2 text-xs font-mono text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border-r border-zinc-200 dark:border-zinc-700 select-none">
+                  {getShortDomain().replace(/^https?:\/\//, "")}/
+                </span>
                 <input
+                  id="custom-alias"
                   type="text"
-                  value={url}
-                  onChange={(e) => setUrl(e.target.value)}
-                  placeholder="Paste your long link here (e.g. https://yourwebsite.com/very-long-url...)"
-                  className="w-full pl-12 pr-4 py-3.5 bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/80 rounded-xl sm:rounded-2xl text-sm sm:text-base placeholder-zinc-400 dark:placeholder-zinc-500 text-zinc-900 dark:text-zinc-100 focus:bg-white dark:focus:bg-zinc-800 focus:outline-none focus:ring-2 focus:ring-blue-500 transition duration-200"
+                  value={customAlias}
+                  onChange={(e) => setCustomAlias(e.target.value)}
+                  placeholder="my-link"
+                  className="flex-1 px-3 py-2 text-xs sm:text-sm bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none"
                 />
               </div>
+            </div>
+          )}
 
-              {/* Submit Button */}
+          {/* Error Message */}
+          {errorMessage && (
+            <div
+              role="alert"
+              className="p-3 rounded-lg bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 text-xs text-red-600 dark:text-red-400"
+            >
+              {errorMessage}
+            </div>
+          )}
+        </form>
+
+        {/* Latest Created Result Alert Card */}
+        {latestCreated && (
+          <div className="mt-5 p-4 rounded-lg bg-zinc-50 dark:bg-zinc-800/50 border border-zinc-200 dark:border-zinc-700 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="min-w-0 space-y-1">
+              <span className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 uppercase tracking-wide">
+                Short URL Ready
+              </span>
+              <p className="font-mono text-sm sm:text-base font-semibold text-zinc-900 dark:text-zinc-100 break-all">
+                {latestCreated.shortUrl}
+              </p>
+              <p className="text-xs text-zinc-500 truncate max-w-md">
+                ↳ {latestCreated.originalUrl}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
               <button
-                type="submit"
-                disabled={isLoading}
-                className="px-6 py-3.5 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 hover:from-blue-500 hover:to-indigo-500 active:scale-[0.99] text-white font-semibold text-sm sm:text-base rounded-xl sm:rounded-2xl shadow-lg shadow-blue-500/25 hover:shadow-blue-500/35 transition-all duration-200 flex items-center justify-center gap-2.5 shrink-0 disabled:opacity-60 cursor-pointer"
+                type="button"
+                onClick={() => handleCopy(latestCreated.id, latestCreated.shortUrl)}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition cursor-pointer ${
+                  copiedId === latestCreated.id
+                    ? "bg-emerald-600 text-white"
+                    : "bg-white dark:bg-zinc-700 text-zinc-800 dark:text-zinc-200 border border-zinc-300 dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-600"
+                }`}
               >
-                {isLoading ? (
+                {copiedId === latestCreated.id ? (
                   <>
-                    <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                    <span>Shortening...</span>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Copied!</span>
                   </>
                 ) : (
                   <>
-                    <Sparkles className="w-4 h-4 text-amber-300 fill-amber-300" />
-                    <span>Shorten URL</span>
-                    <ArrowRight className="w-4 h-4" />
+                    <Copy className="w-3.5 h-3.5" />
+                    <span>Copy</span>
                   </>
                 )}
               </button>
-            </div>
 
-            {/* Toggle Advanced / Custom Slug */}
-            <div className="flex items-center justify-between pt-1">
               <button
                 type="button"
-                onClick={() => setShowAdvanced(!showAdvanced)}
-                className="inline-flex items-center gap-1.5 text-xs font-semibold text-zinc-500 dark:text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 transition"
+                onClick={() => setActiveQrItem(latestCreated)}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium bg-white dark:bg-zinc-700 text-zinc-700 dark:text-zinc-200 border border-zinc-300 dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-600 transition cursor-pointer"
+                title="View QR Code"
               >
-                <Sliders className="w-3.5 h-3.5" />
-                <span>{showAdvanced ? "Hide options" : "Customize link alias (optional)"}</span>
+                <QrCode className="w-3.5 h-3.5" />
+                <span>QR</span>
               </button>
 
-              <div className="flex items-center gap-3 text-xs text-zinc-500 dark:text-zinc-400 hidden sm:flex">
-                <span className="flex items-center gap-1">
-                  <Zap className="w-3.5 h-3.5 text-amber-500" /> Redis Powered
-                </span>
-                <span>•</span>
-                <span className="flex items-center gap-1">
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500" /> 100% Secure
-                </span>
-              </div>
+              <a
+                href={latestCreated.shortUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100 hover:bg-zinc-200/60 dark:hover:bg-zinc-700 transition"
+                title="Open short link"
+              >
+                <ExternalLink className="w-4 h-4" />
+              </a>
             </div>
+          </div>
+        )}
+      </div>
 
-            {/* Advanced Custom Slug Input */}
-            {showAdvanced && (
-              <div className="pt-2 animate-in fade-in slide-in-from-top-1 duration-200">
-                <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1.5">
-                  Custom Alias / Slug
-                </label>
-                <div className="flex items-center rounded-xl bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-200 dark:border-zinc-700/80 overflow-hidden focus-within:ring-2 focus-within:ring-blue-500">
-                  <span className="px-3.5 py-2 text-xs font-mono text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border-r border-zinc-200 dark:border-zinc-700">
-                    {getShortDomain().replace(/^https?:\/\//, "")}/
-                  </span>
-                  <input
-                    type="text"
-                    value={customAlias}
-                    onChange={(e) => setCustomAlias(e.target.value)}
-                    placeholder="my-custom-slug"
-                    className="flex-1 px-3 py-2 text-xs sm:text-sm bg-transparent text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none"
-                  />
-                </div>
-              </div>
-            )}
+      {/* Recent Links History List */}
+      {links.length > 0 && (
+        <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-xl p-5 shadow-sm space-y-3">
+          <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800">
+            <h2 className="text-xs font-semibold uppercase tracking-wider text-zinc-500 dark:text-zinc-400">
+              Recent Links
+            </h2>
+            <button
+              type="button"
+              onClick={handleClearHistory}
+              className="text-xs text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 flex items-center gap-1 transition cursor-pointer"
+            >
+              <Trash2 className="w-3 h-3" />
+              <span>Clear</span>
+            </button>
+          </div>
 
-            {/* Error message */}
-            {errorMessage && (
-              <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-900/50 text-xs text-red-600 dark:text-red-400 flex items-center gap-2">
-                <span>{errorMessage}</span>
-              </div>
-            )}
-          </form>
-
-          {/* Result List of Shortened URLs */}
-          {links.length > 0 && (
-            <div className="mt-6 pt-6 border-t border-zinc-200/80 dark:border-zinc-800/80 space-y-3">
-              <div className="flex items-center justify-between text-xs font-semibold text-zinc-500 dark:text-zinc-400 px-1">
-                <span>Recent Short Links</span>
-                <span>Clicks & Actions</span>
-              </div>
-
-              <div className="space-y-2.5">
-                {links.map((item) => (
-                  <div
-                    key={item.id}
-                    className="p-3.5 sm:p-4 rounded-xl bg-zinc-50/70 dark:bg-zinc-800/40 border border-zinc-200/80 dark:border-zinc-700/60 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:border-blue-300 dark:hover:border-blue-700/50 transition duration-200"
-                  >
-                    {/* Link details */}
-                    <div className="min-w-0 flex-1 space-y-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-sm sm:text-base text-blue-600 dark:text-blue-400 hover:underline">
-                          {item.shortUrl}
-                        </span>
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400 border border-emerald-200/60 dark:border-emerald-800/60">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                          {item.clicks} clicks
-                        </span>
-                      </div>
-                      <p className="text-xs text-zinc-500 dark:text-zinc-400 truncate max-w-md">
-                        {item.originalUrl}
-                      </p>
-                    </div>
-
-                    {/* Action buttons */}
-                    <div className="flex items-center gap-2 shrink-0">
-                      {/* Copy Button */}
-                      <button
-                        type="button"
-                        onClick={() => handleCopy(item.id, item.shortUrl)}
-                        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer ${
-                          copiedId === item.id
-                            ? "bg-emerald-500 text-white shadow-sm shadow-emerald-500/20"
-                            : "bg-white dark:bg-zinc-700/80 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-700"
-                        }`}
-                        aria-label="Copy short link"
-                      >
-                        {copiedId === item.id ? (
-                          <>
-                            <Check className="w-3.5 h-3.5" />
-                            <span>Copied!</span>
-                          </>
-                        ) : (
-                          <>
-                            <Copy className="w-3.5 h-3.5" />
-                            <span>Copy</span>
-                          </>
-                        )}
-                      </button>
-
-                      {/* QR Code Button */}
-                      <button
-                        type="button"
-                        onClick={() => setActiveQrItem(item)}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-white dark:bg-zinc-700/80 text-zinc-700 dark:text-zinc-200 border border-zinc-200 dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition cursor-pointer"
-                        aria-label="View QR Code"
-                      >
-                        <QrCode className="w-3.5 h-3.5 text-indigo-500" />
-                        <span>QR</span>
-                      </button>
-
-                      {/* Open Link */}
-                      <a
-                        href={item.originalUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-white hover:bg-zinc-200/60 dark:hover:bg-zinc-700 transition"
-                        aria-label="Open original link"
-                      >
-                        <ExternalLink className="w-4 h-4" />
-                      </a>
-                    </div>
+          <div className="divide-y divide-zinc-100 dark:divide-zinc-800">
+            {links.map((item) => (
+              <div
+                key={item.id}
+                className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+              >
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-mono font-medium text-zinc-900 dark:text-zinc-100">
+                      {item.shortUrl}
+                    </span>
+                    <span className="text-[11px] text-zinc-400">
+                      · {item.clicks} {item.clicks === 1 ? "click" : "clicks"}
+                    </span>
                   </div>
-                ))}
-              </div>
-
-              {!session?.user && (
-                <div className="mt-4 p-3.5 rounded-xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900/50 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs">
-                  <span className="text-zinc-600 dark:text-zinc-400">
-                    Want to track clicks and view all your shortened links across sessions?
-                  </span>
-                  <Link
-                    href="/login"
-                    className="font-bold text-blue-600 dark:text-blue-400 hover:underline shrink-0"
-                  >
-                    Log In / Sign Up →
-                  </Link>
+                  <p className="text-zinc-500 dark:text-zinc-400 truncate max-w-md">
+                    {item.originalUrl}
+                  </p>
                 </div>
-              )}
+
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleCopy(item.id, item.shortUrl)}
+                    className="p-1.5 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white rounded border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                    title="Copy short link"
+                  >
+                    {copiedId === item.id ? (
+                      <Check className="w-3.5 h-3.5 text-emerald-600" />
+                    ) : (
+                      <Copy className="w-3.5 h-3.5" />
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setActiveQrItem(item)}
+                    className="p-1.5 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white rounded border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition cursor-pointer"
+                    title="QR Code"
+                  >
+                    <QrCode className="w-3.5 h-3.5" />
+                  </button>
+
+                  <a
+                    href={item.shortUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="p-1.5 text-zinc-600 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-white rounded border border-zinc-200 dark:border-zinc-700 hover:bg-zinc-100 dark:hover:bg-zinc-800 transition"
+                    title="Open link"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                  </a>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {!session && (
+            <div className="pt-2 text-center text-xs text-zinc-500 dark:text-zinc-400 border-t border-zinc-100 dark:border-zinc-800">
+              Want permanent link history and detailed analytics?{" "}
+              <Link
+                href="/login"
+                className="font-medium text-zinc-900 dark:text-zinc-100 underline underline-offset-2"
+              >
+                Sign in to your account
+              </Link>
             </div>
           )}
         </div>
-      </div>
+      )}
 
-      {/* QR Code Modal */}
+      {/* QR Code Modal with Real Scannable QR Code */}
       {activeQrItem && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-zinc-900 rounded-3xl p-6 max-w-sm w-full border border-zinc-200 dark:border-zinc-800 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs">
+          <div className="bg-white dark:bg-zinc-900 rounded-xl p-5 max-w-xs w-full border border-zinc-200 dark:border-zinc-800 shadow-lg space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-zinc-100 dark:border-zinc-800">
-              <div className="flex items-center gap-2">
-                <QrCode className="w-5 h-5 text-blue-600 dark:text-blue-400" />
-                <h3 className="font-bold text-sm text-zinc-900 dark:text-zinc-100">
-                  QR Code Preview
-                </h3>
-              </div>
+              <span className="text-xs font-semibold text-zinc-900 dark:text-zinc-100">
+                QR Code
+              </span>
               <button
                 type="button"
                 onClick={() => setActiveQrItem(null)}
-                className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded-lg"
+                className="p-1 text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 rounded cursor-pointer"
+                aria-label="Close modal"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Visual SVG QR Code Mockup */}
-            <div className="flex flex-col items-center justify-center p-6 bg-zinc-50 dark:bg-zinc-800/60 rounded-2xl border border-zinc-200 dark:border-zinc-700">
-              <div className="w-44 h-44 bg-white p-3 rounded-xl shadow-md flex items-center justify-center">
-                {/* SVG QR Code Pattern */}
-                <svg className="w-full h-full text-zinc-900" viewBox="0 0 100 100" fill="currentColor">
-                  {/* Outer corner top-left */}
-                  <rect x="5" y="5" width="30" height="30" rx="4" />
-                  <rect x="10" y="10" width="20" height="20" rx="2" fill="white" />
-                  <rect x="15" y="15" width="10" height="10" rx="1" />
-                  {/* Outer corner top-right */}
-                  <rect x="65" y="5" width="30" height="30" rx="4" />
-                  <rect x="70" y="10" width="20" height="20" rx="2" fill="white" />
-                  <rect x="75" y="15" width="10" height="10" rx="1" />
-                  {/* Outer corner bottom-left */}
-                  <rect x="5" y="65" width="30" height="30" rx="4" />
-                  <rect x="10" y="70" width="20" height="20" rx="2" fill="white" />
-                  <rect x="15" y="75" width="10" height="10" rx="1" />
-                  {/* Data patterns */}
-                  <rect x="42" y="10" width="6" height="15" rx="1" />
-                  <rect x="52" y="15" width="6" height="10" rx="1" />
-                  <rect x="10" y="42" width="15" height="6" rx="1" />
-                  <rect x="15" y="52" width="10" height="6" rx="1" />
-                  <rect x="40" y="40" width="20" height="20" rx="3" fill="#2563eb" />
-                  <rect x="65" y="45" width="8" height="8" rx="1" />
-                  <rect x="78" y="45" width="12" height="6" rx="1" />
-                  <rect x="45" y="68" width="12" height="10" rx="1" />
-                  <rect x="62" y="65" width="10" height="25" rx="1" />
-                  <rect x="78" y="78" width="14" height="14" rx="2" />
-                  <circle cx="50" cy="50" r="4" fill="white" />
-                </svg>
+            <div className="flex flex-col items-center justify-center p-4 bg-zinc-50 dark:bg-zinc-800/50 rounded-lg border border-zinc-200 dark:border-zinc-700">
+              {/* Real Scannable QR Code from QR service */}
+              <div className="w-40 h-40 bg-white p-2 rounded border border-zinc-200 flex items-center justify-center">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(
+                    activeQrItem.shortUrl
+                  )}`}
+                  alt={`QR Code for ${activeQrItem.shortUrl}`}
+                  className="w-full h-full object-contain"
+                  loading="lazy"
+                />
               </div>
-              <p className="mt-3 text-xs font-semibold text-zinc-700 dark:text-zinc-300">
+              <p className="mt-2.5 font-mono text-xs text-zinc-800 dark:text-zinc-200 font-medium break-all text-center">
                 {activeQrItem.shortUrl}
               </p>
-              <p className="text-[11px] text-zinc-500">Scan with any mobile camera</p>
             </div>
 
             <div className="flex gap-2">
@@ -382,14 +431,14 @@ export default function UrlShortenerHero() {
                   handleCopy(activeQrItem.id, activeQrItem.shortUrl);
                   setActiveQrItem(null);
                 }}
-                className="flex-1 py-2 px-3 text-xs font-semibold rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white shadow-md shadow-blue-500/20 hover:opacity-90"
+                className="flex-1 py-1.5 px-3 text-xs font-medium rounded-lg bg-zinc-900 text-white dark:bg-zinc-100 dark:text-zinc-900 hover:opacity-90 transition cursor-pointer"
               >
-                Copy Link & Close
+                Copy Link
               </button>
               <button
                 type="button"
                 onClick={() => setActiveQrItem(null)}
-                className="py-2 px-3 text-xs font-semibold rounded-xl bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300"
+                className="py-1.5 px-3 text-xs font-medium rounded-lg bg-zinc-100 dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-200 dark:hover:bg-zinc-700 transition cursor-pointer"
               >
                 Close
               </button>
