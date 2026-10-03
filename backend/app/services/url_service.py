@@ -43,6 +43,132 @@ class UrlService:
     cleaned = base_url.rstrip("/")
     return f"{cleaned}/{short_code}"
 
+  RESERVED_SLUGS = {
+      "api",
+      "auth",
+      "dashboard",
+      "login",
+      "register",
+      "not-found",
+      "docs",
+      "graphql",
+      "health",
+      "openapi.json",
+      "favicon.ico",
+      "robots.txt",
+      "sitemap.xml",
+      "_next",
+      "links",
+      "analytics",
+      "stats",
+      "admin",
+      "app",
+      "url",
+      "urls",
+      "shorten",
+      "settings",
+      "profile",
+      "user",
+      "users",
+      "static",
+      "public",
+  }
+
+  @classmethod
+  async def check_slug_availability(cls, slug: str) -> dict:
+    """Check whether a custom alias/slug is available.
+
+    Validates format, checks against reserved keywords, checks Redis cache,
+    and checks database records.
+    """
+    if not slug or not slug.strip():
+      return {
+          "available": False,
+          "slug": "",
+          "reason": "invalid_format",
+          "message": "Custom alias cannot be empty.",
+      }
+
+    clean_slug = slug.strip().lower()
+
+    # Length check: 2 to 50 characters
+    if len(clean_slug) < 2:
+      return {
+          "available": False,
+          "slug": clean_slug,
+          "reason": "invalid_format",
+          "message": "Custom alias must be at least 2 characters long.",
+      }
+
+    if len(clean_slug) > 50:
+      return {
+          "available": False,
+          "slug": clean_slug,
+          "reason": "invalid_format",
+          "message": "Custom alias must be 50 characters or less.",
+      }
+
+    # Format check: letters, digits, hyphen, underscore
+    if not re.match(r"^[a-z0-9-_]+$", clean_slug):
+      return {
+          "available": False,
+          "slug": clean_slug,
+          "reason": "invalid_format",
+          "message": "Custom alias can only contain letters, numbers, hyphens (-), and underscores (_).",
+      }
+
+    # Reserved names check
+    if clean_slug in cls.RESERVED_SLUGS:
+      return {
+          "available": False,
+          "slug": clean_slug,
+          "reason": "reserved",
+          "message": f"'{clean_slug}' is a reserved system keyword. Please choose a different alias.",
+      }
+
+    # Cache check in Redis
+    redis = get_redis()
+    if redis:
+      try:
+        cached = await redis.get(f"url:{clean_slug}")
+        if cached:
+          return {
+              "available": False,
+              "slug": clean_slug,
+              "reason": "already_taken",
+              "message": f"Custom alias '{clean_slug}' is already taken.",
+          }
+      except Exception as e:
+        print(f"Redis lookup warning during availability check: {e}")
+
+    # Database check in Supabase
+    supabase = get_supabase()
+    if supabase:
+      try:
+        existing = (
+            supabase.table("urls")
+            .select("id")
+            .eq("short_code", clean_slug)
+            .maybe_single()
+            .execute()
+        )
+        if existing and existing.data:
+          return {
+              "available": False,
+              "slug": clean_slug,
+              "reason": "already_taken",
+              "message": f"Custom alias '{clean_slug}' is already in use. Please choose another one.",
+          }
+      except Exception as e:
+        print(f"Database lookup warning during availability check: {e}")
+
+    return {
+        "available": True,
+        "slug": clean_slug,
+        "reason": None,
+        "message": f"Custom alias '{clean_slug}' is available!",
+    }
+
   @classmethod
   async def shorten_url(
       cls,
@@ -63,26 +189,10 @@ class UrlService:
     # 1. Determine Short Code (Custom alias or Base64 generated)
     short_code = None
     if request.custom_slug and request.custom_slug.strip():
-      clean_slug = (
-          re.sub(r"[^a-zA-Z0-9-_]", "", request.custom_slug.strip().lower())
-      )
-      if clean_slug:
-        # Check if already taken
-        if redis:
-          cached = await redis.get(f"url:{clean_slug}")
-          if cached:
-            raise ValueError(f"Custom slug '{clean_slug}' is already in use.")
-
-        existing = (
-            supabase.table("urls")
-            .select("id")
-            .eq("short_code", clean_slug)
-            .maybe_single()
-            .execute()
-        )
-        if existing and existing.data:
-          raise ValueError(f"Custom slug '{clean_slug}' is already taken.")
-        short_code = clean_slug
+      availability = await cls.check_slug_availability(request.custom_slug)
+      if not availability["available"]:
+        raise ValueError(availability["message"])
+      short_code = availability["slug"]
 
     # If no custom slug, generate unique Base64 short code
     if not short_code:

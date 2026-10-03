@@ -6,7 +6,7 @@ from fastapi.responses import RedirectResponse
 from app.core.auth import AuthUser, get_current_user, get_optional_user
 from app.core.supabase import get_supabase
 from app.models.analytics import UrlAnalyticsResponse
-from app.models.url import UrlCreateRequest, UrlResponse
+from app.models.url import SlugAvailabilityResponse, UrlCreateRequest, UrlResponse
 from app.services.analytics_service import AnalyticsService
 from app.services.url_service import UrlService
 
@@ -97,6 +97,23 @@ async def list_user_urls(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         detail=f"Failed to fetch user URLs: {str(e)}",
     )
+
+
+@router.get("/check-availability", response_model=SlugAvailabilityResponse)
+async def check_slug_availability(slug: str):
+  """Check if a custom alias/slug is available."""
+  if not slug or not slug.strip():
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail="A 'slug' query parameter is required.",
+    )
+  return await UrlService.check_slug_availability(slug)
+
+
+@router.get("/check/{slug}", response_model=SlugAvailabilityResponse)
+async def check_slug_availability_path(slug: str):
+  """Check if a custom alias/slug is available via path parameter."""
+  return await UrlService.check_slug_availability(slug)
 
 
 @router.delete("/{url_id}")

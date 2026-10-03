@@ -1,10 +1,16 @@
 "use client";
 
-import React, { useState, useSyncExternalStore, useMemo } from "react";
+import React, { useState, useSyncExternalStore, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { track } from "@vercel/analytics";
 import { useAuth } from "@/hooks/useAuth";
-import { shortenUrl, formatShortUrl, getShortDomain } from "@/lib/api";
+import {
+  shortenUrl,
+  formatShortUrl,
+  getShortDomain,
+  checkSlugAvailability,
+  type SlugAvailability,
+} from "@/lib/api";
 import {
   Link2,
   Copy,
@@ -15,6 +21,9 @@ import {
   X,
   Loader2,
   Trash2,
+  CheckCircle2,
+  XCircle,
+  AlertCircle,
 } from "lucide-react";
 
 export interface ShortenedItem {
@@ -67,6 +76,69 @@ export default function UrlShortenerHero() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [latestCreated, setLatestCreated] = useState<ShortenedItem | null>(null);
 
+  // Custom mapping name availability state
+  const [aliasChecking, setAliasChecking] = useState(false);
+  const [aliasAvailability, setAliasAvailability] = useState<SlugAvailability | null>(null);
+
+  // Debounced real-time custom mapping availability checker
+  useEffect(() => {
+    const raw = customAlias.trim();
+    if (!raw) {
+      const timer = setTimeout(() => {
+        setAliasAvailability(null);
+        setAliasChecking(false);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+
+    const clean = raw.toLowerCase();
+
+    // Client-side quick validation
+    if (clean.length < 2) {
+      const timer = setTimeout(() => {
+        setAliasAvailability({
+          available: false,
+          slug: clean,
+          message: "Custom mapping name must be at least 2 characters.",
+          reason: "invalid_format",
+        });
+        setAliasChecking(false);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+
+    if (!/^[a-z0-9-_]+$/.test(clean)) {
+      const timer = setTimeout(() => {
+        setAliasAvailability({
+          available: false,
+          slug: clean,
+          message: "Only letters, numbers, hyphens (-), and underscores (_) are allowed.",
+          reason: "invalid_format",
+        });
+        setAliasChecking(false);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+
+    const timer = setTimeout(async () => {
+      setAliasChecking(true);
+      try {
+        const res = await checkSlugAvailability(clean);
+        setAliasAvailability(res);
+      } catch {
+        setAliasAvailability({
+          available: false,
+          slug: clean,
+          message: "Could not verify alias availability at the moment.",
+        });
+      } finally {
+        setAliasChecking(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [customAlias]);
+
   // Synchronize with localStorage safely using useSyncExternalStore to avoid SSR hydration mismatch
   const storedJson = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const links = useMemo<ShortenedItem[]>(() => {
@@ -98,14 +170,26 @@ export default function UrlShortenerHero() {
       return;
     }
 
+    const customTrimmed = customAlias.trim();
+    if (customTrimmed) {
+      if (aliasChecking) {
+        setErrorMessage("Checking alias availability... please wait a moment.");
+        return;
+      }
+      if (aliasAvailability && !aliasAvailability.available) {
+        setErrorMessage(aliasAvailability.message || "The chosen custom alias is not available.");
+        return;
+      }
+    }
+
     setIsLoading(true);
 
     try {
-      const hasCustomSlug = Boolean(customAlias.trim());
+      const hasCustomSlug = Boolean(customTrimmed);
       const result = await shortenUrl(
         {
           original_url: trimmed,
-          custom_slug: customAlias.trim() || undefined,
+          custom_slug: customTrimmed || undefined,
         },
         session?.access_token
       );
@@ -145,6 +229,7 @@ export default function UrlShortenerHero() {
 
       setUrl("");
       setCustomAlias("");
+      setAliasAvailability(null);
     } catch (err: unknown) {
       setErrorMessage(err instanceof Error ? err.message : "Failed to shorten URL");
     } finally {
@@ -231,26 +316,85 @@ export default function UrlShortenerHero() {
 
           {/* Custom Slug Input */}
           {showCustomAlias && (
-            <div className="pt-1">
-              <label
-                htmlFor="custom-alias"
-                className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1"
+            <div className="pt-1 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label
+                  htmlFor="custom-alias"
+                  className="block text-xs font-medium text-zinc-700 dark:text-zinc-300"
+                >
+                  Custom Mapping Name
+                </label>
+                {!customAlias.trim() && (
+                  <button
+                    type="button"
+                    onClick={() => setCustomAlias("karan-resume")}
+                    className="text-[11px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition cursor-pointer"
+                  >
+                    e.g. Try <span className="font-mono text-zinc-600 dark:text-zinc-300 underline">karan-resume</span>
+                  </button>
+                )}
+              </div>
+              <div
+                className={`flex items-center rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border overflow-hidden transition-all ${
+                  customAlias.trim()
+                    ? aliasChecking
+                      ? "border-zinc-300 dark:border-zinc-700 focus-within:ring-1 focus-within:ring-zinc-500"
+                      : aliasAvailability?.available
+                        ? "border-emerald-500/80 dark:border-emerald-500/70 ring-1 ring-emerald-500/30"
+                        : "border-red-500/80 dark:border-red-500/70 ring-1 ring-red-500/30"
+                    : "border-zinc-300 dark:border-zinc-700 focus-within:ring-1 focus-within:ring-zinc-500"
+                }`}
               >
-                Custom Alias
-              </label>
-              <div className="flex items-center rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-300 dark:border-zinc-700 overflow-hidden focus-within:ring-1 focus-within:ring-zinc-500 focus-within:border-zinc-500">
-                <span className="px-3 py-2 text-xs font-mono text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border-r border-zinc-200 dark:border-zinc-700 select-none">
+                <span className="px-3 py-2 text-xs font-mono text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border-r border-zinc-200 dark:border-zinc-700 select-none shrink-0">
                   {getShortDomain().replace(/^https?:\/\//, "")}/
                 </span>
                 <input
                   id="custom-alias"
                   type="text"
                   value={customAlias}
-                  onChange={(e) => setCustomAlias(e.target.value)}
-                  placeholder="my-link"
+                  onChange={(e) =>
+                    setCustomAlias(e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, ""))
+                  }
+                  placeholder="karan-resume"
                   className="flex-1 px-3 py-2 text-xs sm:text-sm bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none"
                 />
+                {customAlias.trim() && (
+                  <div className="pr-3 flex items-center shrink-0">
+                    {aliasChecking ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-400" />
+                    ) : aliasAvailability?.available ? (
+                      <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    ) : (
+                      <XCircle className="w-4 h-4 text-red-500 dark:text-red-400" />
+                    )}
+                  </div>
+                )}
               </div>
+
+              {/* Status Message / Availability Feedback */}
+              {customAlias.trim() ? (
+                <div className="flex items-center gap-1.5 text-xs pt-0.5">
+                  {aliasChecking ? (
+                    <span className="text-zinc-500 flex items-center gap-1">
+                      <Loader2 className="w-3 h-3 animate-spin" /> Checking availability...
+                    </span>
+                  ) : aliasAvailability?.available ? (
+                    <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      &ldquo;{aliasAvailability.slug}&rdquo; is available!
+                    </span>
+                  ) : (
+                    <span className="text-red-600 dark:text-red-400 font-medium flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5" />
+                      {aliasAvailability?.message || "Alias is not available"}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                  Set a custom name (e.g. <span className="font-mono text-zinc-600 dark:text-zinc-400">karan-resume</span>) if available, or leave empty to generate a random code.
+                </p>
+              )}
             </div>
           )}
 

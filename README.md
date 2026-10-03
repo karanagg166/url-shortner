@@ -9,6 +9,7 @@ Built with **Next.js 16** on the frontend and **FastAPI + GraphQL** on the backe
 ## ✨ Features
 
 - **Shorten URLs** — Turn long URLs into compact, shareable short links
+- **Custom Mapping Names** — Use custom aliases (e.g. `karan-resume`) with real-time availability checks and validation
 - **User Authentication** — Register and login to manage your links
 - **Dashboard** — View, manage, and track all your shortened URLs
 - **GraphQL API** — Flexible, type-safe API powered by Strawberry GraphQL
@@ -188,12 +189,44 @@ The backend exposes a **GraphQL** API at `/graphql`.
 Visit [http://localhost:8000/graphql](http://localhost:8000/graphql) in your browser for the built-in GraphiQL explorer, where you can run queries and mutations interactively.
 
 ### Example Query
-
+ 
 ```graphql
 query {
   hello
 }
 ```
+
+### Custom Slug / Alias Availability
+
+You can verify whether a custom mapping name (e.g. `karan-resume`) is available via REST or GraphQL:
+
+**REST Endpoint:**
+```http
+GET http://localhost:8000/api/urls/check-availability?slug=karan-resume
+```
+
+**Response:**
+```json
+{
+  "available": true,
+  "slug": "karan-resume",
+  "message": "Custom alias 'karan-resume' is available!",
+  "reason": null
+}
+```
+
+**GraphQL Query:**
+```graphql
+query CheckSlugAvailability {
+  checkSlugAvailability(slug: "karan-resume") {
+    available
+    slug
+    message
+    reason
+  }
+}
+```
+
 
 ---
 

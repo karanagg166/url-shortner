@@ -14,3 +14,12 @@ class UrlType:
   is_active: bool = True
   created_at: Optional[str] = None
   updated_at: Optional[str] = None
+
+
+@strawberry.type
+class SlugAvailabilityType:
+  available: bool
+  slug: str
+  message: str
+  reason: Optional[str] = None
+

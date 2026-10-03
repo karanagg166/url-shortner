@@ -2,7 +2,7 @@ from typing import List, Optional
 import strawberry
 from app.api.urls import get_base_url
 from app.core.auth import get_optional_user
-from app.graphql.types import UrlType
+from app.graphql.types import SlugAvailabilityType, UrlType
 from app.services.url_service import UrlService
 
 
@@ -12,6 +12,17 @@ class Query:
   @strawberry.field
   def hello(self) -> str:
     return "URL Shortener GraphQL API Online"
+
+  @strawberry.field
+  async def check_slug_availability(self, slug: str) -> SlugAvailabilityType:
+    res = await UrlService.check_slug_availability(slug)
+    return SlugAvailabilityType(
+        available=res["available"],
+        slug=res["slug"],
+        message=res["message"],
+        reason=res.get("reason"),
+    )
+
 
   @strawberry.field
   async def my_urls(self, info: strawberry.types.Info) -> List[UrlType]:

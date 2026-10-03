@@ -57,6 +57,40 @@ export interface ShortenUrlPayload {
   custom_slug?: string;
 }
 
+export interface SlugAvailability {
+  available: boolean;
+  slug: string;
+  message: string;
+  reason?: "already_taken" | "reserved" | "invalid_format" | null;
+}
+
+/**
+ * Check if a custom alias/slug is available for shortening.
+ */
+export async function checkSlugAvailability(slug: string): Promise<SlugAvailability> {
+  const trimmed = slug.trim().toLowerCase();
+  if (!trimmed) {
+    return {
+      available: false,
+      slug: "",
+      message: "Please enter an alias.",
+      reason: "invalid_format",
+    };
+  }
+
+  const response = await fetch(
+    `${API_BASE_URL}/api/urls/check-availability?slug=${encodeURIComponent(trimmed)}`
+  );
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: "Failed to check slug availability" }));
+    throw new Error(errorData.detail || "Failed to check slug availability");
+  }
+
+  return response.json();
+}
+
+
 /**
  * Call backend to convert original URL to a Base64-encoded short URL.
  */

@@ -28,3 +28,11 @@ class UrlStatsResponse(BaseModel):
   clicks_count: int
   is_active: bool
   created_at: Optional[str] = None
+
+
+class SlugAvailabilityResponse(BaseModel):
+  available: bool = Field(..., description="Whether the custom slug is available")
+  slug: str = Field(..., description="The sanitized custom slug")
+  message: str = Field(..., description="Human-readable status message")
+  reason: Optional[str] = Field(None, description="Reason if unavailable: 'already_taken', 'reserved', or 'invalid_format'")
+

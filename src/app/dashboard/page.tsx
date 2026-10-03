@@ -18,6 +18,7 @@ import {
   AlertCircle,
   RefreshCw,
   SlidersHorizontal,
+  XCircle,
 } from "lucide-react";
 import {
   getUserUrls,
@@ -25,7 +26,9 @@ import {
   deleteUserUrl,
   formatShortUrl,
   getShortDomain,
+  checkSlugAvailability,
   type ShortenedUrl,
+  type SlugAvailability,
 } from "@/lib/api";
 
 export default function DashboardPage() {
@@ -45,6 +48,68 @@ export default function DashboardPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [formSuccess, setFormSuccess] = useState<ShortenedUrl | null>(null);
+
+  // Custom slug availability state
+  const [slugChecking, setSlugChecking] = useState(false);
+  const [slugAvailability, setSlugAvailability] = useState<SlugAvailability | null>(null);
+
+  // Debounced real-time custom mapping availability checker
+  useEffect(() => {
+    const raw = customSlug.trim();
+    if (!raw) {
+      const timer = setTimeout(() => {
+        setSlugAvailability(null);
+        setSlugChecking(false);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+
+    const clean = raw.toLowerCase();
+    if (clean.length < 2) {
+      const timer = setTimeout(() => {
+        setSlugAvailability({
+          available: false,
+          slug: clean,
+          message: "Alias must be at least 2 characters.",
+          reason: "invalid_format",
+        });
+        setSlugChecking(false);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+
+    if (!/^[a-z0-9-_]+$/.test(clean)) {
+      const timer = setTimeout(() => {
+        setSlugAvailability({
+          available: false,
+          slug: clean,
+          message: "Only letters, numbers, hyphens (-), and underscores (_) are allowed.",
+          reason: "invalid_format",
+        });
+        setSlugChecking(false);
+      }, 0);
+      return () => clearTimeout(timer);
+    }
+
+    const timer = setTimeout(async () => {
+      setSlugChecking(true);
+      try {
+        const res = await checkSlugAvailability(clean);
+        setSlugAvailability(res);
+      } catch {
+        setSlugAvailability({
+          available: false,
+          slug: clean,
+          message: "Could not verify alias availability.",
+        });
+      } finally {
+        setSlugChecking(false);
+      }
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [customSlug]);
+
 
   // Action state
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
@@ -124,14 +189,26 @@ export default function DashboardPage() {
       return;
     }
 
+    const customTrimmed = customSlug.trim();
+    if (customTrimmed) {
+      if (slugChecking) {
+        setFormError("Checking custom alias availability... please wait.");
+        return;
+      }
+      if (slugAvailability && !slugAvailability.available) {
+        setFormError(slugAvailability.message || "The chosen custom alias is not available.");
+        return;
+      }
+    }
+
     setIsSubmitting(true);
     try {
-      const hasCustomSlug = Boolean(customSlug.trim());
+      const hasCustomSlug = Boolean(customTrimmed);
       const newLink = await shortenUrl(
         {
           original_url: trimmed,
           title: title.trim() || undefined,
-          custom_slug: customSlug.trim() || undefined,
+          custom_slug: customTrimmed || undefined,
         },
         session?.access_token
       );
@@ -144,6 +221,7 @@ export default function DashboardPage() {
       setLongUrl("");
       setTitle("");
       setCustomSlug("");
+      setSlugAvailability(null);
       setShowOptions(false);
 
       try {
@@ -417,26 +495,85 @@ export default function DashboardPage() {
             </div>
 
             {showOptions && (
-              <div className="pt-2">
-                <label
-                  htmlFor="dash-custom-slug"
-                  className="block text-xs font-medium text-zinc-700 dark:text-zinc-300 mb-1"
+              <div className="pt-2 space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <label
+                    htmlFor="dash-custom-slug"
+                    className="block text-xs font-medium text-zinc-700 dark:text-zinc-300"
+                  >
+                    Custom Mapping Name
+                  </label>
+                  {!customSlug.trim() && (
+                    <button
+                      type="button"
+                      onClick={() => setCustomSlug("karan-resume")}
+                      className="text-[11px] text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 transition cursor-pointer"
+                    >
+                      e.g. Try <span className="font-mono text-zinc-600 dark:text-zinc-300 underline">karan-resume</span>
+                    </button>
+                  )}
+                </div>
+                <div
+                  className={`flex items-center rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border overflow-hidden transition-all ${
+                    customSlug.trim()
+                      ? slugChecking
+                        ? "border-zinc-300 dark:border-zinc-700 focus-within:ring-1 focus-within:ring-zinc-500"
+                        : slugAvailability?.available
+                          ? "border-emerald-500/80 dark:border-emerald-500/70 ring-1 ring-emerald-500/30"
+                          : "border-red-500/80 dark:border-red-500/70 ring-1 ring-red-500/30"
+                      : "border-zinc-300 dark:border-zinc-700 focus-within:ring-1 focus-within:ring-zinc-500"
+                  }`}
                 >
-                  Custom Alias
-                </label>
-                <div className="flex items-center rounded-lg bg-zinc-50 dark:bg-zinc-800/60 border border-zinc-300 dark:border-zinc-700 overflow-hidden focus-within:ring-1 focus-within:ring-zinc-500">
-                  <span className="px-3 py-1.5 text-xs font-mono text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border-r border-zinc-200 dark:border-zinc-700 select-none">
+                  <span className="px-3 py-1.5 text-xs font-mono text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-800 border-r border-zinc-200 dark:border-zinc-700 select-none shrink-0">
                     {getShortDomain().replace(/^https?:\/\//, "")}/
                   </span>
                   <input
                     id="dash-custom-slug"
                     type="text"
-                    placeholder="custom-slug"
+                    placeholder="karan-resume"
                     value={customSlug}
-                    onChange={(e) => setCustomSlug(e.target.value)}
+                    onChange={(e) =>
+                      setCustomSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-_]/g, ""))
+                    }
                     className="flex-1 px-3 py-1.5 text-xs sm:text-sm bg-transparent text-zinc-900 dark:text-zinc-100 placeholder:text-zinc-400 focus:outline-none"
                   />
+                  {customSlug.trim() && (
+                    <div className="pr-3 flex items-center shrink-0">
+                      {slugChecking ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-400" />
+                      ) : slugAvailability?.available ? (
+                        <Check className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                      ) : (
+                        <XCircle className="w-4 h-4 text-red-500 dark:text-red-400" />
+                      )}
+                    </div>
+                  )}
                 </div>
+
+                {/* Status Message / Availability Feedback */}
+                {customSlug.trim() ? (
+                  <div className="flex items-center gap-1.5 text-xs pt-0.5">
+                    {slugChecking ? (
+                      <span className="text-zinc-500 flex items-center gap-1">
+                        <Loader2 className="w-3 h-3 animate-spin" /> Checking availability...
+                      </span>
+                    ) : slugAvailability?.available ? (
+                      <span className="text-emerald-600 dark:text-emerald-400 font-medium flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5" />
+                        &ldquo;{slugAvailability.slug}&rdquo; is available!
+                      </span>
+                    ) : (
+                      <span className="text-red-600 dark:text-red-400 font-medium flex items-center gap-1">
+                        <AlertCircle className="w-3.5 h-3.5" />
+                        {slugAvailability?.message || "Alias is not available"}
+                      </span>
+                    )}
+                  </div>
+                ) : (
+                  <p className="text-[11px] text-zinc-400 dark:text-zinc-500">
+                    Set a custom name (e.g. <span className="font-mono text-zinc-600 dark:text-zinc-400">karan-resume</span>) if available, or leave empty to generate a random code.
+                  </p>
+                )}
               </div>
             )}
           </form>
