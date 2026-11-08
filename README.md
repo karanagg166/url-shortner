@@ -1,5 +1,7 @@
 # 🔗 URL Shortener
 
+Use [uv](https://docs.astral.sh/uv/getting-started/installation/) for Python environments and dependencies. Activate a project virtual environment before `uv pip install`; the committed requirements and constraints remain authoritative. Use `--system` only inside disposable containers or CI runners. JavaScript tooling uses pnpm.
+
 A full-stack URL shortener application with user authentication, link analytics, and a dashboard to manage shortened URLs.
 
 Built with **Next.js 16** on the frontend and **FastAPI + GraphQL** on the backend, backed by **Supabase** for persistent storage and **Redis** for high-speed caching.
@@ -52,7 +54,7 @@ Built with **Next.js 16** on the frontend and **FastAPI + GraphQL** on the backe
 | Database    | [Supabase](https://supabase.com/) (Postgres + Auth)               |
 | Cache       | [Redis 7](https://redis.io/)                                      |
 | DevOps      | Docker · Docker Compose                                           |
-| Package Mgr | pnpm 11 (frontend) · pip (backend)                                |
+| Package Mgr | pnpm 11 (frontend) · uv (backend)                                |
 
 ---
 
@@ -108,9 +110,9 @@ This spins up three services:
 
 ```bash
 cd backend
-python -m venv venv
+uv venv --python 3.12 venv
 source venv/bin/activate   # Windows: venv\Scripts\activate
-pip install -r requirements.txt
+uv pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
